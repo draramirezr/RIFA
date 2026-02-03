@@ -95,3 +95,27 @@ Modo desarrollo (watch):
 .\tools\tailwindcss.exe -i .\static\src\tailwind.css -o .\static\dist\tailwind.css --watch
 ```
 
+## Deploy en Railway (Django)
+
+### Variables de entorno recomendadas
+
+```text
+DJANGO_DEBUG=0
+DJANGO_SECRET_KEY=pon-una-clave-segura-larga
+DJANGO_ALLOWED_HOSTS=.railway.app
+DJANGO_CSRF_TRUSTED_ORIGINS=https://TU-DOMINIO.railway.app
+
+DB_ENGINE=mysql
+DB_HOST=ballast.proxy.rlwy.net
+DB_PORT=10669
+DB_USER=root
+DB_PASSWORD=TU_PASSWORD
+DB_NAME=rifas
+DB_SSL=1
+```
+
+### Comandos
+- **Start**: Railway usa `Procfile` (ya incluido).
+- **Migraciones**: `python manage.py migrate`
+- **Static** (si lo requieres): `python manage.py collectstatic --noinput`
+
