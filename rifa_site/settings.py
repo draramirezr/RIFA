@@ -93,6 +93,15 @@ if DB_ENGINE == "mysql":
     import pymysql  # type: ignore
 
     pymysql.install_as_MySQLdb()
+    # Django 6+ expects mysqlclient >= 2.2.1; PyMySQL reports legacy version.
+    # This keeps the backend happy while using PyMySQL.
+    try:
+        import MySQLdb  # type: ignore
+
+        MySQLdb.__version__ = "2.2.1"
+        MySQLdb.version_info = (2, 2, 1)
+    except Exception:
+        pass
 
     DATABASES = {
         "default": {
@@ -108,6 +117,9 @@ if DB_ENGINE == "mysql":
             },
         }
     }
+    # Optional SSL (often required by hosted DBs like Railway)
+    if os.environ.get("DB_SSL", "0") == "1":
+        DATABASES["default"]["OPTIONS"]["ssl"] = {}
 else:
     DATABASES = {
         "default": {
