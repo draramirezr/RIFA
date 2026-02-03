@@ -218,14 +218,13 @@ LOGGING = {
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / "staticfiles"
 # Only collect compiled assets in production (avoid collecting Tailwind source files under static/src/)
-STATICFILES_DIRS = []
+# Use a prefix so `{% static 'dist/tailwind.css' %}` resolves correctly with manifest storage.
 _static_dist = BASE_DIR / "static" / "dist"
 if _static_dist.exists():
-    STATICFILES_DIRS.append(_static_dist)
+    STATICFILES_DIRS = [("dist", _static_dist)]
 else:
-    _static = BASE_DIR / "static"
-    if _static.exists():
-        STATICFILES_DIRS.append(_static)
+    # Fallback for dev environments where dist isn't built yet
+    STATICFILES_DIRS = [BASE_DIR / "static"] if (BASE_DIR / "static").exists() else []
 
 # WhiteNoise (static files in production)
 STORAGES = {
