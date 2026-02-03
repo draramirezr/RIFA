@@ -1,0 +1,340 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% block title %}Comprar - {{ raffle.title }}{% endblock %}
+
+{% block content %}
+  <div class="mb-6">
+    <a href="{% url 'rifas:raffle_detail' raffle.slug %}" class="text-sm text-slate-300 hover:text-white">← Volver</a>
+    <div class="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+      <div>
+        <h1 class="text-3xl font-semibold tracking-tight">Finaliza tu compra</h1>
+        <p class="mt-2 text-slate-300">
+          Estás participando en: <span class="text-slate-100 font-semibold">{{ raffle.title }}</span>
+        </p>
+      </div>
+      <div class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm">
+        <div class="text-slate-400">Precio por boleto</div>
+        <div class="text-lg font-semibold text-slate-100">RD$ {{ raffle.price_per_ticket|intcomma }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
+    <section class="lg:col-span-2">
+      <form id="purchaseForm" method="post" enctype="multipart/form-data" class="space-y-6">
+        {% csrf_token %}
+      <div class="rounded-2xl border border-white/10 bg-white/5 p-6">
+        <div class="text-lg font-semibold">1) Tus datos</div>
+        <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div class="sm:col-span-2">
+            <label class="block text-sm text-slate-300">Nombre completo</label>
+            <div class="mt-1">{{ form.full_name }}</div>
+            {% if form.full_name.errors %}<div class="mt-1 text-sm text-red-300">{{ form.full_name.errors }}</div>{% endif %}
+          </div>
+          <div>
+            <label class="block text-sm text-slate-300">Teléfono</label>
+            <div class="mt-1 grid grid-cols-3 gap-3">
+              <div class="col-span-1">{{ form.phone_prefix }}</div>
+              <div class="col-span-2">{{ form.phone_number }}</div>
+            </div>
+            {% if form.phone_prefix.errors %}<div class="mt-1 text-sm text-red-300">{{ form.phone_prefix.errors }}</div>{% endif %}
+            {% if form.phone_number.errors %}<div class="mt-1 text-sm text-red-300">{{ form.phone_number.errors }}</div>{% endif %}
+          </div>
+          <div>
+            <label class="block text-sm text-slate-300">Email (opcional)</label>
+            <div class="mt-1">{{ form.email }}</div>
+            {% if form.email.errors %}<div class="mt-1 text-sm text-red-300">{{ form.email.errors }}</div>{% endif %}
+          </div>
+        </div>
+      </div>
+
+      <div class="rounded-2xl border border-white/10 bg-white/5 p-6">
+        <div class="text-lg font-semibold">2) Cantidad y comprobante</div>
+
+        {% if raffle.min_purchase_quantity and raffle.min_purchase_quantity > 1 %}
+          <div class="mt-3 rounded-xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-200">
+            Mínimo de compra: <b>{{ raffle.min_purchase_quantity }}</b> boletos pagados.
+          </div>
+        {% endif %}
+
+        <div class="mt-4 space-y-4">
+          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label class="block text-sm text-slate-300">Cantidad de boletos</label>
+              <div class="mt-1">
+                <div class="flex w-full items-stretch overflow-hidden rounded-xl border border-white/10 bg-slate-950/40">
+                  <button type="button" id="decQty"
+                          class="grid w-12 place-items-center border-r border-white/10 text-slate-200 hover:bg-white/10 active:bg-white/15"
+                          aria-label="Disminuir cantidad">
+                    −
+                  </button>
+                  <div class="flex-1">
+                    {{ form.quantity }}
+                  </div>
+                  <button type="button" id="incQty"
+                          class="grid w-12 place-items-center border-l border-white/10 text-slate-200 hover:bg-white/10 active:bg-white/15"
+                          aria-label="Aumentar cantidad">
+                    +
+                  </button>
+                </div>
+              </div>
+              {% if form.quantity.errors %}<div class="mt-1 text-sm text-red-300">{{ form.quantity.errors }}</div>{% endif %}
+            </div>
+
+            <div class="rounded-xl border border-white/10 bg-slate-950/40 p-4">
+              <div class="flex items-center justify-between">
+                <div class="text-sm text-slate-300">Total</div>
+              </div>
+              <div class="mt-2 text-2xl font-semibold text-slate-100">
+                RD$ <span id="total">0</span>
+              </div>
+
+              {% if offer %}
+                <div class="mt-3 rounded-lg border border-emerald-500/15 bg-emerald-500/10 p-3 text-sm text-emerald-200">
+                  Promoción activa: por cada <b>{{ offer.buy_quantity }}</b> pagados recibes <b>{{ offer.bonus_quantity }}</b> gratis.
+                  <div class="mt-1 text-xs text-emerald-200/80">
+                    Gratis: <b><span id="bonus">0</span></b> boletos.
+                  </div>
+                </div>
+              {% endif %}
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-sm text-slate-300">Foto del comprobante</label>
+            <div class="mt-1">{{ form.proof_image }}</div>
+            {% if form.proof_image.errors %}<div class="mt-1 text-sm text-red-300">{{ form.proof_image.errors }}</div>{% endif %}
+            <div id="fileClientError" class="mt-1 hidden text-sm text-red-300"></div>
+            <div class="mt-2 text-xs text-slate-400">JPG/PNG/WebP. Máximo 6MB.</div>
+            <div id="previewWrap" class="mt-3 hidden">
+              <img id="previewImg" alt="Vista previa" class="max-h-64 w-full rounded-2xl border border-white/10 object-cover" />
+            </div>
+          </div>
+
+          <button type="submit"
+                  class="inline-flex w-full items-center justify-center rounded-xl bg-emerald-500 px-4 py-3 font-semibold text-slate-950 hover:bg-emerald-400 transition">
+            Enviar compra (pendiente de aprobación)
+          </button>
+        </div>
+      </div>
+      </form>
+    </section>
+
+    <aside class="space-y-6 lg:sticky lg:top-6 lg:h-fit">
+      <div class="rounded-2xl border border-white/10 bg-white/5 p-6">
+        <div class="text-lg font-semibold">Resumen</div>
+        <div class="mt-4 space-y-3 text-sm">
+          <div class="flex items-center justify-between text-slate-300">
+            <span>Rifa</span>
+            <span class="text-slate-100 font-semibold text-right">{{ raffle.title }}</span>
+          </div>
+          <div class="flex items-center justify-between text-slate-300">
+            <span>Cantidad</span>
+            <span class="text-slate-100 font-semibold"><span id="qtySummary">0</span> boletos</span>
+          </div>
+          {% if offer %}
+            <div class="flex items-center justify-between text-slate-300">
+              <span>Boletos gratis</span>
+              <span class="text-slate-100 font-semibold"><span id="bonus2">0</span></span>
+            </div>
+          {% endif %}
+          <div class="flex items-center justify-between text-slate-300">
+            <span>Precio</span>
+            <span class="text-slate-100 font-semibold">RD$ {{ raffle.price_per_ticket|intcomma }}</span>
+          </div>
+          <div class="flex items-center justify-between text-slate-300">
+            <span>Total</span>
+            <span class="text-slate-100 font-semibold">RD$ <span id="total2">0</span></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="rounded-2xl border border-white/10 bg-white/5 p-6">
+        <div class="text-lg font-semibold">Métodos de pago</div>
+        {% if bank_accounts %}
+          <div class="mt-4 grid grid-cols-4 gap-2">
+            {% for b in bank_accounts %}
+              <button type="button"
+                      class="bankBtn group flex h-12 w-12 items-center justify-center rounded-xl border border-white/10 bg-slate-950/40 hover:bg-slate-950/60 sm:h-14 sm:w-14"
+                      data-bank="{{ b.bank_name }}"
+                      data-account="{{ b.account_number }}"
+                      {% if forloop.first %}data-default="1"{% endif %}>
+                {% if b.logo %}
+                  <img src="{{ b.logo.url }}" alt="{{ b.bank_name }}" class="h-full w-full p-2 object-contain" />
+                {% else %}
+                  <div class="h-full w-full rounded-lg border border-white/10 bg-white/5 grid place-items-center p-2 text-[10px] font-semibold text-slate-200">
+                    {{ b.bank_name|slice:":2"|upper }}
+                  </div>
+                {% endif %}
+              </button>
+            {% endfor %}
+          </div>
+
+          <div id="bankDetails" class="mt-4 rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+            <div class="text-sm text-slate-400">Banco</div>
+            <div id="bankName" class="mt-1 text-base font-semibold text-slate-100">—</div>
+
+            <div class="mt-4 grid grid-cols-1 gap-3 text-sm">
+              <div class="flex items-center justify-between">
+                <span class="text-slate-400">Titular</span>
+                <span class="text-slate-100 font-semibold">{{ site.payment_holder_name }}</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-slate-400">Tipo</span>
+                <span class="text-slate-100 font-semibold">{{ site.payment_account_type }}</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-slate-400">Moneda</span>
+                <span class="text-slate-100 font-semibold">{{ site.payment_currency }}</span>
+              </div>
+            </div>
+
+            <div class="mt-4">
+              <div class="text-sm text-slate-400">Cuenta</div>
+              <div class="mt-1 flex items-center gap-2">
+                <div id="bankAccount"
+                     class="flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2 font-mono text-sm text-slate-100">
+                  —
+                </div>
+                <button type="button" id="copyAccount"
+                        class="rounded-xl bg-white/10 px-3 py-2 text-sm font-semibold text-white hover:bg-white/15">
+                  Copiar
+                </button>
+              </div>
+              <div id="copyMsg" class="mt-2 hidden text-xs text-emerald-200">Copiado.</div>
+            </div>
+          </div>
+
+          <div class="mt-4 text-xs text-slate-400">
+            Importante: tu compra queda pendiente hasta validar el comprobante.
+          </div>
+        {% else %}
+          <div class="mt-3 rounded-2xl border border-white/10 bg-slate-950/40 p-4 text-sm text-slate-300">
+            Métodos de pago no configurados todavía. (Pronto se mostrarán aquí).
+          </div>
+        {% endif %}
+      </div>
+
+      <div class="rounded-2xl border border-white/10 bg-white/5 p-6">
+        <div class="text-lg font-semibold">¿Qué pasa después?</div>
+        <ol class="mt-3 list-decimal pl-5 text-sm text-slate-300 space-y-1">
+          <li>Revisamos tu comprobante.</li>
+          <li>Si está correcto, aprobamos la compra.</li>
+          <li>Se asignan tus boletos (y promoción si aplica).</li>
+          <li>Luego puedes verlos en “Mis boletos”.</li>
+        </ol>
+      </div>
+    </aside>
+  </div>
+
+  <script>
+    const nf = new Intl.NumberFormat("es-DO");
+    const price = Number("{{ raffle.price_per_ticket }}");
+    const minPurchase = Number("{{ raffle.min_purchase_quantity|default:1 }}");
+    const qty = document.getElementById("id_quantity");
+    const decQty = document.getElementById("decQty");
+    const incQty = document.getElementById("incQty");
+    const totalEl = document.getElementById("total");
+    const totalEl2 = document.getElementById("total2");
+    const qtySummary = document.getElementById("qtySummary");
+    const proof = document.getElementById("id_proof_image");
+    const previewWrap = document.getElementById("previewWrap");
+    const previewImg = document.getElementById("previewImg");
+    const fileClientError = document.getElementById("fileClientError");
+
+    const offerBuy = {% if offer %}Number("{{ offer.buy_quantity }}"){% else %}0{% endif %};
+    const offerBonus = {% if offer %}Number("{{ offer.bonus_quantity }}"){% else %}0{% endif %};
+    const offerMin = {% if offer %}Number("{{ offer.min_paid_quantity }}"){% else %}0{% endif %};
+    const bonusEl = document.getElementById("bonus");
+    const bonusEl2 = document.getElementById("bonus2");
+
+    function calcBonus(q) {
+      if (!offerBuy || !offerBonus) return 0;
+      if (offerMin && q < offerMin) return 0;
+      return Math.floor(q / offerBuy) * offerBonus;
+    }
+
+    function recalc() {
+      const q = Math.max(0, Math.floor(Number(qty?.value || 0)));
+      const total = Math.max(0, Math.round(q * price));
+      totalEl.textContent = nf.format(total);
+      totalEl2.textContent = nf.format(total);
+      if (qtySummary) qtySummary.textContent = nf.format(q);
+      const b = calcBonus(q);
+      if (bonusEl) bonusEl.textContent = nf.format(b);
+      if (bonusEl2) bonusEl2.textContent = nf.format(b);
+      if (qty) {
+        qty.classList.toggle("border-amber-400/60", q > 0 && q < minPurchase);
+      }
+    }
+
+    qty?.addEventListener("input", recalc);
+    decQty?.addEventListener("click", () => {
+      const current = Math.max(0, Math.floor(Number(qty?.value || 0)));
+      const next = Math.max(minPurchase, current - 1);
+      qty.value = String(next);
+      recalc();
+    });
+    incQty?.addEventListener("click", () => {
+      const current = Math.max(0, Math.floor(Number(qty?.value || 0)));
+      const next = Math.max(minPurchase, current + 1);
+      qty.value = String(next);
+      recalc();
+    });
+    recalc();
+
+    proof?.addEventListener("change", () => {
+      const f = proof.files && proof.files[0];
+      if (!f) {
+        previewWrap?.classList.add("hidden");
+        if (fileClientError) fileClientError.classList.add("hidden");
+        return;
+      }
+      // Si pesa mucho, el servidor la optimiza automáticamente.
+      if (fileClientError) fileClientError.classList.add("hidden");
+      const url = URL.createObjectURL(f);
+      previewImg.src = url;
+      previewWrap?.classList.remove("hidden");
+    });
+
+    // Bank selector + copy
+    (function () {
+      const btns = Array.from(document.querySelectorAll(".bankBtn"));
+      const bankName = document.getElementById("bankName");
+      const bankAccount = document.getElementById("bankAccount");
+      const copyBtn = document.getElementById("copyAccount");
+      const copyMsg = document.getElementById("copyMsg");
+
+      if (!btns.length || !bankName || !bankAccount || !copyBtn) return;
+
+      function select(btn) {
+        btns.forEach(b => b.classList.remove("ring-2","ring-emerald-400/40","border-emerald-400/40"));
+        btn.classList.add("ring-2","ring-emerald-400/40","border-emerald-400/40");
+        bankName.textContent = btn.dataset.bank || "—";
+        bankAccount.textContent = btn.dataset.account || "—";
+        if (copyMsg) copyMsg.classList.add("hidden");
+      }
+
+      btns.forEach(btn => btn.addEventListener("click", () => select(btn)));
+      const def = btns.find(b => b.dataset.default === "1") || btns[0];
+      if (def) select(def);
+
+      copyBtn.addEventListener("click", async () => {
+        const text = (bankAccount.textContent || "").trim();
+        if (!text || text === "—") return;
+        try {
+          await navigator.clipboard.writeText(text);
+        } catch {
+          const ta = document.createElement("textarea");
+          ta.value = text;
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand("copy");
+          document.body.removeChild(ta);
+        }
+        if (copyMsg) copyMsg.classList.remove("hidden");
+      });
+    })();
+  </script>
+{% endblock %}
+

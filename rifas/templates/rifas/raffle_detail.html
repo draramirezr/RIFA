@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% block title %}{{ raffle.title }}{% endblock %}
+
+{% block content %}
+  <div class="grid grid-cols-1 gap-8 lg:grid-cols-3">
+    <div class="lg:col-span-2">
+      <h1 class="text-3xl font-semibold tracking-tight">{{ raffle.title }}</h1>
+      <div class="mt-2 text-slate-300">
+        Sorteo: <span class="text-slate-100">{{ raffle.draw_date|date:"d M Y, h:i a" }}</span>
+      </div>
+
+      {% if raffle.image or raffle.images.all %}
+        <div class="mt-6">
+          <div class="relative mx-auto max-w-sm sm:max-w-md">
+            <div id="carousel"
+                 class="flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-smooth pb-2 [-ms-overflow-style:none] [scrollbar-width:none]"
+                 style="scrollbar-width: none;">
+              {% if raffle.image %}
+                <div class="snap-start shrink-0 w-full">
+                  <img src="{{ raffle.image.url }}" alt="{{ raffle.title }}"
+                       class="aspect-[3/4] w-full rounded-2xl border border-white/10 object-cover" />
+                </div>
+              {% endif %}
+              {% for img in raffle.images.all|slice:":3" %}
+                <div class="snap-start shrink-0 w-full">
+                  <img src="{{ img.image.url }}" alt="{{ raffle.title }}"
+                       class="aspect-[3/4] w-full rounded-2xl border border-white/10 object-cover" />
+                </div>
+              {% endfor %}
+            </div>
+
+            <button type="button" id="prevBtn"
+                    class="absolute left-3 top-1/2 -translate-y-1/2 rounded-full border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-white hover:bg-slate-950/90">
+              ←
+            </button>
+            <button type="button" id="nextBtn"
+                    class="absolute right-3 top-1/2 -translate-y-1/2 rounded-full border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-white hover:bg-slate-950/90">
+              →
+            </button>
+          </div>
+
+          <div class="mt-2 text-xs text-slate-400">
+            Desliza para ver más fotos.
+          </div>
+        </div>
+
+        <script>
+          (function () {
+            const el = document.getElementById("carousel");
+            const prev = document.getElementById("prevBtn");
+            const next = document.getElementById("nextBtn");
+            if (!el || !prev || !next) return;
+
+            function step(dir) {
+              const w = el.clientWidth;
+              el.scrollBy({ left: dir * (w + 16), behavior: "smooth" });
+            }
+
+            prev.addEventListener("click", () => step(-1));
+            next.addEventListener("click", () => step(1));
+          })();
+        </script>
+      {% endif %}
+
+      <div class="prose prose-invert mt-6 max-w-none">
+        <p class="whitespace-pre-line">{{ raffle.description }}</p>
+      </div>
+    </div>
+
+    <aside class="rounded-2xl border border-white/10 bg-white/5 p-6 h-fit">
+      {% if raffle.max_tickets and raffle.is_sold_out %}
+        <div class="mb-4 rounded-xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-200">
+          Esta rifa está vendida al 100%. Ya no se aceptan más compras.
+        </div>
+      {% elif not raffle.is_active %}
+        <div class="mb-4 rounded-xl border border-slate-500/20 bg-slate-500/10 p-4 text-sm text-slate-200">
+          Esta rifa no está activa. Puedes ver los detalles, pero no comprar.
+        </div>
+      {% endif %}
+
+      <div class="text-sm text-slate-300">Precio por boleto</div>
+      <div class="mt-1 text-2xl font-semibold">RD$ {{ raffle.price_per_ticket|intcomma }}</div>
+
+      {% if raffle.max_tickets %}
+        <div class="mt-5">
+          <div class="flex items-center justify-between text-xs text-slate-400">
+            <div class="text-slate-200 font-semibold">{{ raffle.sold_percent }}% vendido</div>
+          </div>
+          <div class="mt-2 h-2 w-full overflow-hidden rounded-full bg-white/10">
+            <div class="h-full rounded-full bg-emerald-400" style="width: {{ raffle.sold_percent }}%"></div>
+          </div>
+          <div class="mt-2 text-xs text-slate-400">Esta rifa se realiza cuando llegue al 100%.</div>
+        </div>
+      {% endif %}
+
+      {% if raffle.is_active and not raffle.is_sold_out %}
+        <a href="{% url 'rifas:buy_ticket' raffle.slug %}"
+           class="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-emerald-500 px-4 py-3 font-semibold text-slate-950 hover:bg-emerald-400 transition">
+          Comprar boletos
+        </a>
+      {% else %}
+        <button disabled
+                class="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-white/10 px-4 py-3 font-semibold text-slate-400">
+          Compra no disponible
+        </button>
+      {% endif %}
+
+      <div class="mt-6 space-y-3 text-sm text-slate-300">
+        <div class="font-semibold text-slate-100">¿Cómo participar?</div>
+        <ol class="list-decimal pl-5 space-y-1">
+          <li>Completa el formulario de compra con tus datos.</li>
+          <li>Realiza la transferencia al método de pago indicado.</li>
+          <li>Sube la foto del comprobante de pago para validar tu participación.</li>
+          <li>Tu compra quedará pendiente hasta la verificación del pago.</li>
+          <li>Una vez aprobado, recibirás confirmación y tus boletos quedarán oficialmente asignados.</li>
+        </ol>
+
+        {% if show_conditions %}
+          <div class="pt-2">
+            <div class="font-semibold text-slate-100">Condiciones</div>
+            <ul class="mt-2 list-disc pl-5 space-y-1">
+              {% if raffle.min_purchase_quantity and raffle.min_purchase_quantity > 1 %}
+                <li>🎟 Compra mínima: {{ raffle.min_purchase_quantity }} boletos pagados.</li>
+              {% endif %}
+              {% if offer %}
+                <li>🎁 Promoción: Por cada {{ offer.buy_quantity }} boletos pagados recibes {{ offer.bonus_quantity }} boleto gratis.</li>
+              {% endif %}
+            </ul>
+          </div>
+        {% endif %}
+      </div>
+    </aside>
+  </div>
+{% endblock %}
+

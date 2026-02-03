@@ -1,0 +1,350 @@
+from django.db import models, transaction
+from django.core.validators import MinValueValidator
+from django.utils import timezone
+from django.utils.text import slugify
+import secrets
+from django.core.exceptions import ValidationError
+
+
+class Raffle(models.Model):
+    title = models.CharField(max_length=200)
+    slug = models.SlugField(max_length=220, unique=True, blank=True)
+    description = models.TextField(blank=True)
+    draw_date = models.DateTimeField()
+    price_per_ticket = models.PositiveIntegerField(validators=[MinValueValidator(0)])
+    max_tickets = models.PositiveIntegerField(null=True, blank=True, help_text="Opcional. Límite total de boletos.")
+    min_purchase_quantity = models.PositiveIntegerField(
+        default=1,
+        validators=[MinValueValidator(1)],
+        help_text="Mínimo de boletos pagados por compra (ej: 1, 5, 10).",
+    )
+    image = models.ImageField(upload_to="raffles/", blank=True, null=True, help_text="Opcional. Imagen principal.")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Rifa"
+        verbose_name_plural = "Rifas"
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return self.title
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            base = slugify(self.title)[:200] or "rifa"
+            slug = base
+            n = 2
+            while Raffle.objects.filter(slug=slug).exclude(pk=self.pk).exists():
+                slug = f"{base}-{n}"
+                n += 1
+            self.slug = slug
+        super().save(*args, **kwargs)
+
+    @property
+    def is_finished(self) -> bool:
+        return self.draw_date <= timezone.now()
+
+    @property
+    def sold_tickets(self) -> int:
+        # Tickets are created when purchases are approved.
+        return self.tickets.count()
+
+    @property
+    def sold_percent(self) -> int:
+        if not self.max_tickets:
+            return 0
+        if self.max_tickets <= 0:
+            return 0
+        return min(100, int((self.sold_tickets / self.max_tickets) * 100))
+
+    @property
+    def is_sold_out(self) -> bool:
+        return bool(self.max_tickets) and self.sold_tickets >= (self.max_tickets or 0)
+
+    def close_if_sold_out(self):
+        """
+        Business rule: the raffle runs / ends when 100% of tickets are sold.
+        When sold out, mark it inactive.
+        """
+        if self.is_sold_out and self.is_active:
+            self.is_active = False
+            self.save(update_fields=["is_active", "updated_at"])
+
+    def get_active_offer(self):
+        """
+        Returns the best active offer for this raffle (highest bonus).
+        """
+        now = timezone.now()
+        qs = self.offers.filter(is_active=True).filter(
+            models.Q(starts_at__isnull=True) | models.Q(starts_at__lte=now),
+            models.Q(ends_at__isnull=True) | models.Q(ends_at__gte=now),
+        )
+        return qs.order_by("-bonus_quantity", "-buy_quantity", "-created_at").first()
+
+
+class TicketPurchase(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pendiente"
+        APPROVED = "approved", "Aprobado"
+        REJECTED = "rejected", "Rechazado"
+
+    raffle = models.ForeignKey(Raffle, on_delete=models.PROTECT, related_name="purchases")
+    full_name = models.CharField(max_length=200)
+    phone = models.CharField(max_length=40)
+    email = models.EmailField(blank=True)
+    quantity = models.PositiveIntegerField(validators=[MinValueValidator(1)], help_text="Boletos pagados.")
+    bonus_quantity = models.PositiveIntegerField(default=0, help_text="Boletos de oferta (gratis).")
+    total_tickets = models.PositiveIntegerField(default=0, help_text="Total de boletos asignados (pagados + oferta).")
+    total_amount = models.PositiveIntegerField(validators=[MinValueValidator(0)])
+    proof_image = models.ImageField(upload_to="payments/")
+    public_reference = models.CharField(
+        max_length=12,
+        unique=True,
+        blank=True,
+        help_text="Código para que el cliente consulte su compra (recomendado).",
+    )
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    admin_notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    decided_at = models.DateTimeField(null=True, blank=True)
+    client_ip = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.CharField(max_length=400, blank=True)
+
+    class Meta:
+        verbose_name = "Compra de boleto"
+        verbose_name_plural = "Compras de boletos"
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"{self.full_name} - {self.raffle.title} ({self.quantity})"
+
+    def save(self, *args, **kwargs):
+        # Always keep total_amount consistent with raffle price * quantity
+        if self.raffle_id and self.quantity:
+            self.total_amount = int(self.raffle.price_per_ticket or 0) * int(self.quantity or 0)
+        if not self.public_reference:
+            self.public_reference = self._generate_reference()
+        # Keep total_tickets consistent
+        self.total_tickets = int(self.quantity or 0) + int(self.bonus_quantity or 0)
+        super().save(*args, **kwargs)
+
+    @staticmethod
+    def _generate_reference() -> str:
+        # Short, URL-safe, human friendly
+        return secrets.token_urlsafe(8).replace("-", "").replace("_", "")[:12].upper()
+
+    def generate_tickets_if_needed(self):
+        """
+        Create sequential ticket numbers for this purchase if approved.
+        Safe to call multiple times (idempotent).
+        """
+        if self.status != self.Status.APPROVED:
+            return
+        if self.tickets.count() >= self.total_tickets:
+            return
+
+        with transaction.atomic():
+            # Validate capacity
+            if self.raffle.max_tickets:
+                remaining = self.raffle.max_tickets - self.raffle.tickets.count()
+                if remaining <= 0:
+                    raise ValueError("No quedan boletos disponibles para esta rifa.")
+                if (self.total_tickets - self.tickets.count()) > remaining:
+                    raise ValueError("No hay suficientes boletos disponibles para completar esta compra.")
+
+            # Lock raffle tickets to avoid duplicate numbers under concurrency (MySQL/InnoDB).
+            last = (
+                Ticket.objects.select_for_update()
+                .filter(raffle=self.raffle)
+                .order_by("-number")
+                .first()
+            )
+            start = (last.number if last else 0) + 1
+            to_create = []
+            existing = self.tickets.count()
+            needed = max(0, self.total_tickets - existing)
+            for i in range(needed):
+                to_create.append(
+                    Ticket(
+                        raffle=self.raffle,
+                        purchase=self,
+                        number=start + i,
+                    )
+                )
+            Ticket.objects.bulk_create(to_create)
+            # If this approval completes the raffle, close it.
+            self.raffle.close_if_sold_out()
+
+    def apply_offer(self):
+        offer = self.raffle.get_active_offer()
+        bonus = 0
+        if offer:
+            bonus = offer.bonus_for(self.quantity)
+        self.bonus_quantity = bonus
+        self.total_tickets = int(self.quantity or 0) + int(bonus or 0)
+
+    def approve(self, notes: str = ""):
+        self.apply_offer()
+        self.status = self.Status.APPROVED
+        self.admin_notes = notes
+        self.decided_at = timezone.now()
+        self.save(
+            update_fields=[
+                "status",
+                "admin_notes",
+                "decided_at",
+                "total_amount",
+                "public_reference",
+                "bonus_quantity",
+                "total_tickets",
+            ]
+        )
+        self.generate_tickets_if_needed()
+
+    def reject(self, notes: str = ""):
+        self.status = self.Status.REJECTED
+        self.admin_notes = notes
+        self.decided_at = timezone.now()
+        self.save(update_fields=["status", "admin_notes", "decided_at"])
+
+
+class SiteContent(models.Model):
+    """
+    Contenido editable para la portada (landing).
+    Mantener un solo registro (singleton) editado desde el admin.
+    """
+
+    about_title = models.CharField(max_length=120, default="Quiénes somos")
+    about_body = models.TextField(
+        default="Somos una plataforma de rifas. Participa subiendo tu comprobante de transferencia."
+    )
+
+    policy_title = models.CharField(max_length=120, default="Políticas de la rifa")
+    policy_body = models.TextField(
+        default=(
+            "La compra queda PENDIENTE hasta verificación del comprobante.\n"
+            "No se aceptan comprobantes ilegibles o alterados.\n"
+            "El sorteo se realiza en la fecha indicada en cada rifa."
+        )
+    )
+
+    payment_title = models.CharField(max_length=120, default="Métodos de pago")
+    payment_holder_name = models.CharField(max_length=120, default="Federico A. Grullon")
+    payment_account_type = models.CharField(max_length=120, default="Cuenta de Ahorro")
+    payment_currency = models.CharField(max_length=10, default="DOP")
+    payment_body = models.TextField(
+        default=(
+            "Transferencia bancaria / Depósito.\n"
+            "Zelle.\n"
+            "PayPal."
+        )
+    )
+
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Contenido del sitio"
+        verbose_name_plural = "Contenido del sitio"
+
+    def __str__(self) -> str:
+        return "Contenido del sitio"
+
+    @classmethod
+    def get_solo(cls) -> "SiteContent":
+        obj = cls.objects.order_by("-updated_at").first()
+        if obj:
+            return obj
+        return cls.objects.create()
+
+
+class BankAccount(models.Model):
+    bank_name = models.CharField(max_length=80)
+    account_number = models.CharField(max_length=40)
+    sort_order = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    # Logo placeholder (optional). User can upload later.
+    logo = models.ImageField(upload_to="banks/", blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Cuenta bancaria"
+        verbose_name_plural = "Cuentas bancarias"
+        ordering = ["sort_order", "created_at"]
+
+    def __str__(self) -> str:
+        return f"{self.bank_name} - {self.account_number}"
+
+    def clean(self):
+        # Enforce max 4 active accounts
+        if self.is_active:
+            qs = BankAccount.objects.filter(is_active=True)
+            if self.pk:
+                qs = qs.exclude(pk=self.pk)
+            if qs.count() >= 4:
+                raise ValidationError("Solo se permiten 4 cuentas bancarias activas.")
+
+
+class Ticket(models.Model):
+    raffle = models.ForeignKey(Raffle, on_delete=models.PROTECT, related_name="tickets")
+    purchase = models.ForeignKey(TicketPurchase, on_delete=models.CASCADE, related_name="tickets")
+    number = models.PositiveIntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Boleto"
+        verbose_name_plural = "Boletos"
+        constraints = [
+            models.UniqueConstraint(fields=["raffle", "number"], name="uniq_raffle_ticket_number"),
+        ]
+        ordering = ["number"]
+
+    def __str__(self) -> str:
+        return f"{self.raffle.title} - #{self.number}"
+
+
+class RaffleImage(models.Model):
+    raffle = models.ForeignKey(Raffle, on_delete=models.CASCADE, related_name="images")
+    image = models.ImageField(upload_to="raffles/")
+    sort_order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Imagen de rifa"
+        verbose_name_plural = "Imágenes de rifa"
+        ordering = ["sort_order", "created_at"]
+
+    def __str__(self) -> str:
+        return f"Imagen - {self.raffle.title}"
+
+
+class RaffleOffer(models.Model):
+    raffle = models.ForeignKey(Raffle, on_delete=models.CASCADE, related_name="offers")
+    min_paid_quantity = models.PositiveIntegerField(
+        default=0,
+        help_text="Mínimo de boletos pagados para que aplique la oferta (0 = sin mínimo).",
+    )
+    buy_quantity = models.PositiveIntegerField(validators=[MinValueValidator(1)], help_text="Compra N")
+    bonus_quantity = models.PositiveIntegerField(validators=[MinValueValidator(1)], help_text="Recibe M gratis")
+    starts_at = models.DateTimeField(null=True, blank=True)
+    ends_at = models.DateTimeField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Oferta"
+        verbose_name_plural = "Ofertas"
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"{self.raffle.title}: compra {self.buy_quantity} y recibe {self.bonus_quantity}"
+
+    def bonus_for(self, paid_qty: int) -> int:
+        paid_qty = int(paid_qty or 0)
+        if paid_qty <= 0:
+            return 0
+        min_required = int(self.min_paid_quantity or 0)
+        if min_required and paid_qty < min_required:
+            return 0
+        return (paid_qty // int(self.buy_quantity)) * int(self.bonus_quantity)

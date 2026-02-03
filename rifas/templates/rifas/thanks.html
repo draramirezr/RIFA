@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% block title %}Gracias{% endblock %}
+
+{% block content %}
+  <div class="max-w-2xl rounded-2xl border border-white/10 bg-white/5 p-8">
+    <h1 class="text-3xl font-semibold tracking-tight">¡Gracias!</h1>
+    <p class="mt-3 text-slate-300">
+      Recibimos tu solicitud de compra para la rifa <span class="text-slate-100 font-semibold">{{ purchase.raffle.title }}</span>.
+      Tu compra está <span class="text-amber-200 font-semibold">pendiente</span> hasta que verifiquemos el comprobante.
+    </p>
+
+    <div class="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 text-sm">
+      <div class="rounded-xl border border-white/10 bg-slate-950/40 p-4">
+        <div class="flex items-center justify-between gap-3">
+          <div>
+            <div class="text-slate-400">Código de compra</div>
+            <div class="mt-1 font-semibold text-slate-100">{{ purchase.public_reference }}</div>
+            <div class="mt-1 text-xs text-slate-400">Úsalo en “Mis boletos”.</div>
+          </div>
+          <button type="button" id="copyRef"
+                  class="h-fit rounded-xl bg-white/10 px-3 py-2 text-sm font-semibold text-white hover:bg-white/15">
+            Copiar
+          </button>
+        </div>
+        <div id="copyMsg" class="mt-2 hidden text-xs text-emerald-200">Copiado.</div>
+      </div>
+      <div class="rounded-xl border border-white/10 bg-slate-950/40 p-4">
+        <div class="text-slate-400">Total</div>
+        <div class="mt-1 font-semibold text-slate-100">RD$ {{ purchase.total_amount|intcomma }}</div>
+      </div>
+    </div>
+
+    <a href="{% url 'rifas:home' %}"
+       class="mt-8 inline-flex w-full items-center justify-center rounded-xl bg-white/10 px-4 py-3 font-semibold text-white hover:bg-white/15 transition">
+      Volver al inicio
+    </a>
+  </div>
+
+  <script>
+    (function () {
+      const btn = document.getElementById("copyRef");
+      const msg = document.getElementById("copyMsg");
+      const text = "{{ purchase.public_reference }}";
+      if (!btn) return;
+      btn.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(text);
+        } catch {
+          const ta = document.createElement("textarea");
+          ta.value = text;
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand("copy");
+          document.body.removeChild(ta);
+        }
+        if (msg) msg.classList.remove("hidden");
+      });
+    })();
+  </script>
+{% endblock %}
+

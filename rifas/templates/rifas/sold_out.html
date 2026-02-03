@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Rifa vendida{% endblock %}
+
+{% block content %}
+  <div class="max-w-2xl rounded-2xl border border-white/10 bg-white/5 p-8">
+    <h1 class="text-3xl font-semibold tracking-tight">Rifa vendida al 100%</h1>
+    <p class="mt-3 text-slate-300">
+      Esta rifa ya alcanzó el 100% de boletos vendidos. Ya no se pueden comprar más boletos.
+    </p>
+    <a href="{% url 'rifas:home' %}"
+       class="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-emerald-500 px-4 py-3 font-semibold text-slate-950 hover:bg-emerald-400 transition">
+      Volver al inicio
+    </a>
+  </div>
+{% endblock %}
+

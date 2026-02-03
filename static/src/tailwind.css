@@ -1,0 +1,7 @@
+/* Tailwind v4 standalone (no Node): CSS-first config */
+@import "tailwindcss";
+
+/* Tell Tailwind where to scan for class names */
+@source "../../templates/**/*.html";
+@source "../../rifas/templates/**/*.html";
+

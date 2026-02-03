@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% block title %}Mis boletos{% endblock %}
+
+{% block content %}
+  <div class="max-w-3xl">
+    <h1 class="text-3xl font-semibold tracking-tight">Mis boletos</h1>
+    <p class="mt-2 text-slate-300">
+      Consulta el estado de tus compras y tus números de boleto cuando estén aprobados.
+    </p>
+
+    <div class="mt-6 rounded-2xl border border-white/10 bg-white/5 p-6">
+      <form method="post" class="space-y-4">
+        {% csrf_token %}
+
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <label class="block text-sm text-slate-300">Rifa</label>
+            <div class="mt-1">{{ form.raffle }}</div>
+            {% if form.raffle.errors %}<div class="mt-1 text-sm text-red-300">{{ form.raffle.errors }}</div>{% endif %}
+          </div>
+          <div>
+            <label class="block text-sm text-slate-300">Teléfono</label>
+            <div class="mt-1 grid grid-cols-3 gap-3">
+              <div class="col-span-1">{{ form.phone_prefix }}</div>
+              <div class="col-span-2">{{ form.phone_number }}</div>
+            </div>
+            {% if form.phone_prefix.errors %}<div class="mt-1 text-sm text-red-300">{{ form.phone_prefix.errors }}</div>{% endif %}
+            {% if form.phone_number.errors %}<div class="mt-1 text-sm text-red-300">{{ form.phone_number.errors }}</div>{% endif %}
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-sm text-slate-300">Código (opcional)</label>
+          <div class="mt-1">{{ form.reference }}</div>
+          <div class="mt-1 text-xs text-slate-400">{{ form.reference.help_text }}</div>
+          {% if form.reference.errors %}<div class="mt-1 text-sm text-red-300">{{ form.reference.errors }}</div>{% endif %}
+        </div>
+
+        <button type="submit"
+                class="inline-flex w-full items-center justify-center rounded-xl bg-emerald-500 px-4 py-3 font-semibold text-slate-950 hover:bg-emerald-400 transition">
+          Buscar
+        </button>
+      </form>
+    </div>
+
+    {% if raffle %}
+      <div class="mt-8">
+        <div class="text-sm text-slate-400">Resultados para</div>
+        <div class="mt-1 text-xl font-semibold">{{ raffle.title }}</div>
+      </div>
+    {% endif %}
+
+    {% if purchases %}
+      <div class="mt-6 space-y-4">
+        {% for p in purchases %}
+          <div class="rounded-2xl border border-white/10 bg-white/5 p-6">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div class="text-sm text-slate-300">
+                Código de compra <span class="text-slate-100 font-semibold">{{ p.public_reference }}</span>
+              </div>
+              {% if p.status == "approved" %}
+                <span class="rounded-full bg-emerald-500/15 px-3 py-1 text-sm text-emerald-200">Aprobado</span>
+              {% elif p.status == "rejected" %}
+                <span class="rounded-full bg-red-500/15 px-3 py-1 text-sm text-red-200">Rechazado</span>
+              {% else %}
+                <span class="rounded-full bg-amber-500/15 px-3 py-1 text-sm text-amber-200">Pendiente</span>
+              {% endif %}
+            </div>
+
+            <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3 text-sm">
+              <div class="rounded-xl border border-white/10 bg-slate-950/40 p-4">
+                <div class="text-slate-400">Boletos</div>
+                <div class="mt-1 font-semibold text-slate-100">{{ p.quantity|intcomma }}</div>
+              </div>
+              <div class="rounded-xl border border-white/10 bg-slate-950/40 p-4">
+                <div class="text-slate-400">Total</div>
+                <div class="mt-1 font-semibold text-slate-100">RD$ {{ p.total_amount|intcomma }}</div>
+              </div>
+              <div class="rounded-xl border border-white/10 bg-slate-950/40 p-4">
+                <div class="text-slate-400">Fecha</div>
+                <div class="mt-1 font-semibold text-slate-100">{{ p.created_at|date:"d M Y, h:i a" }}</div>
+              </div>
+            </div>
+
+            <div class="mt-5">
+              <div class="text-sm font-semibold">Números de boleto</div>
+              {% if p.status == "approved" and p.tickets.all %}
+                <div class="mt-2 flex flex-wrap gap-2">
+                  {% for t in p.tickets.all %}
+                    <span class="rounded-lg border border-white/10 bg-slate-950/40 px-3 py-1 text-sm text-slate-100">#{{ t.number }}</span>
+                  {% endfor %}
+                </div>
+              {% else %}
+                <div class="mt-2 text-sm text-slate-300">
+                  {% if p.status == "pending" %}
+                    Aún en revisión. Cuando se apruebe, aquí verás tus números.
+                  {% elif p.status == "rejected" %}
+                    Rechazado. Revisa las notas del administrador o vuelve a comprar con un comprobante válido.
+                  {% else %}
+                    Aún no se han generado los números.
+                  {% endif %}
+                </div>
+              {% endif %}
+            </div>
+
+            {% if p.admin_notes %}
+              <div class="mt-4 rounded-xl border border-white/10 bg-slate-950/40 p-4 text-sm text-slate-300">
+                <div class="font-semibold text-slate-100">Notas</div>
+                <div class="mt-1 whitespace-pre-line">{{ p.admin_notes }}</div>
+              </div>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    {% elif raffle %}
+      <div class="mt-6 rounded-2xl border border-white/10 bg-white/5 p-6 text-slate-300">
+        No encontramos compras para ese teléfono en esta rifa.
+        Si tienes el código de compra, prueba agregándolo para una búsqueda más precisa.
+      </div>
+    {% endif %}
+  </div>
+{% endblock %}
+

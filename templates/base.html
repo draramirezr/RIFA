@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{% block title %}Rifas{% endblock %}</title>
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'dist/tailwind.css' %}">
+  </head>
+  <body class="min-h-screen bg-slate-950 text-slate-100">
+    <header class="border-b border-white/10 bg-slate-950/60 backdrop-blur">
+      <div class="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
+        <a href="{% url 'rifas:home' %}" class="text-lg font-semibold tracking-tight">
+          Sistema de Rifas
+        </a>
+        <!-- Desktop nav -->
+        <nav class="hidden items-center gap-4 text-sm sm:flex">
+          <a href="{% url 'rifas:my_tickets' %}" class="text-slate-300 hover:text-white">Mis boletos</a>
+          <a href="{% url 'rifas:raffle_history' %}" class="text-slate-300 hover:text-white">Historial</a>
+          <a href="/admin/" class="text-slate-300 hover:text-white">Admin</a>
+        </nav>
+
+        <!-- Mobile nav -->
+        <details class="relative sm:hidden">
+          <summary class="list-none cursor-pointer rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-200 hover:bg-white/10">
+            Menú
+          </summary>
+          <div class="absolute right-0 mt-2 w-56 rounded-2xl border border-white/10 bg-slate-950/95 p-2 backdrop-blur">
+            <a href="{% url 'rifas:my_tickets' %}" class="block rounded-xl px-3 py-2 text-sm text-slate-200 hover:bg-white/10">
+              Mis boletos
+            </a>
+            <a href="{% url 'rifas:raffle_history' %}" class="block rounded-xl px-3 py-2 text-sm text-slate-200 hover:bg-white/10">
+              Historial
+            </a>
+            <a href="/admin/" class="block rounded-xl px-3 py-2 text-sm text-slate-200 hover:bg-white/10">
+              Admin
+            </a>
+          </div>
+        </details>
+      </div>
+    </header>
+
+    <main class="mx-auto max-w-6xl px-4 py-8">
+      {% block content %}{% endblock %}
+    </main>
+
+    <footer class="border-t border-white/10">
+      <div class="mx-auto max-w-6xl px-4 py-8 text-sm text-slate-400">
+        © {% now "Y" %} Sistema de Rifas. Todos los derechos reservados.
+      </div>
+    </footer>
+  </body>
+</html>
+
