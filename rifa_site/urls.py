@@ -19,7 +19,7 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
 
-from rifas.media_views import public_media
+from rifas.media_views import media_serve
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -28,7 +28,6 @@ urlpatterns = [
 
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
-elif settings.SERVE_PUBLIC_MEDIA:
-    urlpatterns += [
-        path("media/<path:path>", public_media, name="public_media"),
-    ]
+else:
+    # Production: serve ONLY public media + staff-only private media.
+    urlpatterns += [path("media/<path:path>", media_serve, name="media_serve")]
