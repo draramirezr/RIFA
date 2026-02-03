@@ -240,6 +240,10 @@ STORAGES = {
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
+# In production, serve ONLY public media via Django if enabled (Railway).
+# NOTE: This should be paired with a persistent volume mounted to MEDIA_ROOT.
+SERVE_PUBLIC_MEDIA = os.environ.get("SERVE_PUBLIC_MEDIA", "0") == "1"
+
 # Email (purchase notifications)
 # Dev default: prints emails in terminal (no SMTP required)
 EMAIL_BACKEND = os.environ.get(

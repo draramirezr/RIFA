@@ -112,10 +112,17 @@ DB_USER=root
 DB_PASSWORD=TU_PASSWORD
 DB_NAME=rifas
 DB_SSL=1
+
+# Para ver imágenes públicas (rifas/logos) en producción
+SERVE_PUBLIC_MEDIA=1
 ```
 
 ### Comandos
 - **Start**: Railway usa `Procfile` (ya incluido).
 - **Migraciones**: `python manage.py migrate`
 - **Static** (si lo requieres): `python manage.py collectstatic --noinput`
+
+### Media (uploads)
+Railway tiene filesystem efímero. Para que las imágenes subidas no se pierdan, monta un **Volume** en:
+- `MEDIA_ROOT` → `/app/media`
 
