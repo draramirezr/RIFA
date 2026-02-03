@@ -12,7 +12,7 @@ from .models import BankAccount, Raffle, SiteContent, TicketPurchase
 def home(request):
     raffles = (
         Raffle.objects.filter(is_active=True)
-        .prefetch_related("tickets")
+        .annotate(sold_tickets_annot=models.Count("tickets"))
         .order_by("draw_date")
     )
     site = SiteContent.get_solo()
@@ -22,7 +22,10 @@ def home(request):
 def raffle_detail(request, slug: str):
     # Allow viewing inactive/finished raffles (needed for Historial).
     try:
-        raffle = get_object_or_404(Raffle.objects.prefetch_related("tickets", "images"), slug=slug)
+        raffle = get_object_or_404(
+            Raffle.objects.annotate(sold_tickets_annot=models.Count("tickets")).prefetch_related("images"),
+            slug=slug,
+        )
     except Http404:
         return render(request, "rifas/not_found.html", status=404)
     offer = raffle.get_active_offer()
@@ -100,7 +103,12 @@ def raffle_history(request):
     now = timezone.now()
     finished = (
         Raffle.objects.filter(models.Q(draw_date__lte=now) | models.Q(is_active=False))
-        .prefetch_related("tickets")
+        .filter(show_in_history=True)
         .order_by("-draw_date")
     )
     return render(request, "rifas/history.html", {"finished": finished, "site": site})
+
+
+def terms(request):
+    site = SiteContent.get_solo()
+    return render(request, "rifas/terms.html", {"site": site})

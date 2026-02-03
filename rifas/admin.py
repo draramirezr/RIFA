@@ -1,5 +1,6 @@
 from django.contrib import admin, messages
 from django.core.exceptions import ValidationError
+from django.utils.html import format_html
 from django.utils import timezone
 
 from .models import BankAccount, Raffle, RaffleImage, RaffleOffer, SiteContent, Ticket, TicketPurchase
@@ -32,12 +33,45 @@ class RaffleAdmin(admin.ModelAdmin):
         "price_per_ticket",
         "ticket_counter",
         "is_active",
+        "show_in_history",
         "created_at",
     )
-    list_filter = ("is_active",)
+    list_filter = ("is_active", "show_in_history")
     search_fields = ("title", "slug")
     prepopulated_fields = {"slug": ("title",)}
     inlines = [RaffleImageInline, RaffleOfferInline]
+    actions = ["show_in_history_action", "hide_from_history_action"]
+
+    @admin.action(description="Mostrar en historial")
+    def show_in_history_action(self, request, queryset):
+        queryset.update(show_in_history=True)
+
+    @admin.action(description="Ocultar del historial")
+    def hide_from_history_action(self, request, queryset):
+        queryset.update(show_in_history=False)
+
+    def save_model(self, request, obj, form, change):
+        # Best-effort: validate raffle video duration <= 20s using metadata.
+        # If it fails to read duration, we allow upload but recommend using MP4/WebM.
+        if getattr(obj, "video", None):
+            try:
+                from mutagen import File as MutagenFile  # type: ignore
+
+                f = obj.video.file
+                try:
+                    f.seek(0)
+                except Exception:
+                    pass
+                meta = MutagenFile(f)
+                length = float(getattr(getattr(meta, "info", None), "length", 0) or 0)
+                if length and length > 20.0:
+                    raise ValidationError("El video debe durar máximo 20 segundos.")
+            except ValidationError:
+                raise
+            except Exception:
+                # Don't block admin save for metadata issues.
+                pass
+        return super().save_model(request, obj, form, change)
 
     @admin.display(description="Boletos (vendidos/total)")
     def ticket_counter(self, obj: Raffle):
@@ -94,6 +128,20 @@ def reject_purchases(modeladmin, request, queryset):
     queryset.update(status=TicketPurchase.Status.REJECTED, decided_at=now)
 
 
+class PhonePrefixFilter(admin.SimpleListFilter):
+    title = "Prefijo"
+    parameter_name = "phone_prefix"
+
+    def lookups(self, request, model_admin):
+        return [("809", "809"), ("829", "829"), ("849", "849")]
+
+    def queryset(self, request, queryset):
+        val = self.value()
+        if not val:
+            return queryset
+        return queryset.filter(phone__startswith=val)
+
+
 @admin.register(TicketPurchase)
 class TicketPurchaseAdmin(admin.ModelAdmin):
     list_display = (
@@ -101,15 +149,20 @@ class TicketPurchaseAdmin(admin.ModelAdmin):
         "raffle",
         "full_name",
         "phone",
+        "bank_account",
         "quantity",
+        "promo_preview",
         "bonus_quantity",
         "total_tickets",
         "total_amount",
+        "proof_link",
         "status",
         "created_at",
     )
-    list_filter = ("status", "raffle")
-    search_fields = ("full_name", "phone", "email", "raffle__title")
+    list_filter = ("status", "raffle", "bank_account", PhonePrefixFilter)
+    search_fields = ("full_name", "phone", "email", "raffle__title", "bank_account__bank_name", "bank_account__account_number")
+    search_help_text = "Busca por teléfono, nombre, rifa o banco."
+    list_select_related = ("raffle", "bank_account")
     readonly_fields = (
         "created_at",
         "decided_at",
@@ -119,8 +172,44 @@ class TicketPurchaseAdmin(admin.ModelAdmin):
         "total_tickets",
         "client_ip",
         "user_agent",
+        "proof_preview",
     )
     actions = [approve_purchases, reject_purchases]
+
+    @admin.display(description="Promoción (vista previa)")
+    def promo_preview(self, obj: TicketPurchase):
+        offer = obj.raffle.get_active_offer() if obj.raffle_id else None
+        if not offer:
+            return "—"
+        est = offer.bonus_for(obj.quantity) if obj.quantity else 0
+        if est:
+            return f"{offer.buy_quantity}+{offer.bonus_quantity} (gratis estimado: {est})"
+        return f"{offer.buy_quantity}+{offer.bonus_quantity}"
+
+    @admin.display(description="Comprobante")
+    def proof_link(self, obj: TicketPurchase):
+        if not getattr(obj, "proof_image", None):
+            return "—"
+        try:
+            url = obj.proof_image.url
+        except Exception:
+            return "—"
+        return format_html('<a href="{}" target="_blank" rel="noopener">Ver</a>', url)
+
+    @admin.display(description="Vista previa del comprobante")
+    def proof_preview(self, obj: TicketPurchase):
+        if not getattr(obj, "proof_image", None):
+            return "—"
+        try:
+            url = obj.proof_image.url
+        except Exception:
+            return "—"
+        return format_html(
+            '<a href="{0}" target="_blank" rel="noopener">'
+            '<img src="{0}" alt="comprobante" style="max-width:360px; width:100%; border-radius:12px; border:1px solid rgba(255,255,255,.15);" />'
+            "</a>",
+            url,
+        )
 
     def save_model(self, request, obj, form, change):
         prev_status = None

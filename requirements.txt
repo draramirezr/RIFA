@@ -3,3 +3,4 @@ whitenoise==6.11.0
 Pillow==11.3.0
 PyMySQL==1.1.2
 gunicorn==25.0.1
+mutagen==1.47.0

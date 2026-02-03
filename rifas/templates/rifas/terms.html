@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}{{ site.terms_title }}{% endblock %}
+
+{% block content %}
+  <div class="mx-auto max-w-3xl">
+    <h1 class="text-3xl font-semibold tracking-tight">{{ site.terms_title }}</h1>
+    <div class="mt-4 rounded-2xl border border-white/10 bg-white/5 p-6 text-slate-200">
+      <div class="prose prose-invert max-w-none">
+        <p class="whitespace-pre-line">{{ site.terms_body }}</p>
+      </div>
+    </div>
+  </div>
+{% endblock %}
+

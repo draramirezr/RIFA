@@ -4,7 +4,6 @@ import os
 
 from django.conf import settings
 from django.http import Http404
-from django.contrib.admin.views.decorators import staff_member_required
 from django.views.static import serve
 
 
@@ -19,18 +18,20 @@ def _normalize_and_validate_path(path: str) -> str:
     return path
 
 
-def _safe_serve(request, path: str):
+def _safe_serve(request, path: str, *, cache_timeout: int):
     # Extra safety: ensure file stays inside MEDIA_ROOT
     full = os.path.normpath(os.path.join(str(settings.MEDIA_ROOT), path))
     if not full.startswith(os.path.normpath(str(settings.MEDIA_ROOT))):
         raise Http404()
-    return serve(request, path, document_root=settings.MEDIA_ROOT)
+    return serve(request, path, document_root=settings.MEDIA_ROOT, cache_timeout=cache_timeout)
 
 
-@staff_member_required
 def _private_media(request, path: str):
-    # Hide existence from non-staff users (the decorator redirects to admin login).
-    return _safe_serve(request, path)
+    # Do NOT redirect; return 404 to avoid leaking existence.
+    user = getattr(request, "user", None)
+    if not user or not getattr(user, "is_authenticated", False) or not getattr(user, "is_staff", False):
+        raise Http404()
+    return _safe_serve(request, path, cache_timeout=60)
 
 
 def media_serve(request, path: str):
@@ -43,7 +44,7 @@ def media_serve(request, path: str):
     path = _normalize_and_validate_path(path)
 
     if any(path.startswith(p) for p in ALLOWED_PUBLIC_MEDIA_PREFIXES):
-        return _safe_serve(request, path)
+        return _safe_serve(request, path, cache_timeout=60 * 60 * 24 * 30)  # 30 days
 
     if any(path.startswith(p) for p in ALLOWED_PRIVATE_MEDIA_PREFIXES):
         # Only staff can view payment proofs.

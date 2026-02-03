@@ -6,6 +6,41 @@ import secrets
 from django.core.exceptions import ValidationError
 
 
+def validate_video_file(file):
+    """
+    Basic validation for raffle promo videos.
+    Accepts MP4/WebM only. Duration is validated in admin/form (best effort).
+    """
+    content_type = getattr(file, "content_type", "") or ""
+    if content_type not in ("video/mp4", "video/webm"):
+        raise ValidationError("El video debe ser MP4 o WebM.")
+
+    # Reasonable hard size limit to protect server resources (duration is separate)
+    hard_limit = 50 * 1024 * 1024  # 50MB
+    if getattr(file, "size", 0) > hard_limit:
+        raise ValidationError("El video es demasiado grande (máximo 50MB).")
+
+
+def validate_history_media_file(file):
+    """
+    Media for raffle history:
+    - Winner media (photo/video)
+    - Delivery media (photo/video)
+    """
+    content_type = getattr(file, "content_type", "") or ""
+    if content_type.startswith("image/"):
+        hard_limit = 25 * 1024 * 1024  # 25MB
+        if getattr(file, "size", 0) > hard_limit:
+            raise ValidationError("La imagen es demasiado grande (máximo 25MB).")
+        return
+    if content_type in ("video/mp4", "video/webm"):
+        hard_limit = 80 * 1024 * 1024  # 80MB
+        if getattr(file, "size", 0) > hard_limit:
+            raise ValidationError("El video es demasiado grande (máximo 80MB).")
+        return
+    raise ValidationError("El archivo debe ser una imagen o un video (MP4/WebM).")
+
+
 class Raffle(models.Model):
     title = models.CharField(max_length=200)
     slug = models.SlugField(max_length=220, unique=True, blank=True)
@@ -19,6 +54,56 @@ class Raffle(models.Model):
         help_text="Mínimo de boletos pagados por compra (ej: 1, 5, 10).",
     )
     image = models.ImageField(upload_to="raffles/", blank=True, null=True, help_text="Opcional. Imagen principal.")
+    video = models.FileField(
+        upload_to="raffles/videos/",
+        blank=True,
+        null=True,
+        validators=[validate_video_file],
+        help_text="Opcional. Video promocional (MP4/WebM, máximo 20 segundos).",
+    )
+    # History (post-finish)
+    show_in_history = models.BooleanField(
+        default=True,
+        help_text="Si está desactivado, esta rifa no se mostrará en el historial público.",
+    )
+    finished_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Opcional. Fecha/hora real cuando se culminó (si difiere de la fecha de sorteo).",
+    )
+    history_cover_image = models.ImageField(
+        upload_to="raffles/history/",
+        blank=True,
+        null=True,
+        help_text="Opcional. Portada para el historial (una sola foto).",
+    )
+    winner_name = models.CharField(
+        max_length=120,
+        blank=True,
+        help_text="Opcional. Nombre del ganador(a) para mostrar en el historial.",
+    )
+    winner_media = models.FileField(
+        upload_to="raffles/history/winner/",
+        blank=True,
+        null=True,
+        validators=[validate_history_media_file],
+        help_text="Opcional. Foto o video del ganador(a).",
+    )
+    winner_notes = models.TextField(
+        blank=True,
+        help_text="Opcional. Observación del ganador(a) (ej: ciudad, IG, etc.).",
+    )
+    delivery_media = models.FileField(
+        upload_to="raffles/history/delivery/",
+        blank=True,
+        null=True,
+        validators=[validate_history_media_file],
+        help_text="Opcional. Foto o video de la entrega del premio.",
+    )
+    delivery_notes = models.TextField(
+        blank=True,
+        help_text="Opcional. Observación de la entrega (ej: fecha, lugar).",
+    )
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -40,7 +125,25 @@ class Raffle(models.Model):
                 slug = f"{base}-{n}"
                 n += 1
             self.slug = slug
+        # If admin marks raffle inactive and finished_at is not set, store timestamp.
+        if self.pk and not self.is_active and self.finished_at is None:
+            self.finished_at = timezone.now()
         super().save(*args, **kwargs)
+
+    @staticmethod
+    def _is_video_name(name: str) -> bool:
+        n = (name or "").lower()
+        return n.endswith(".mp4") or n.endswith(".webm")
+
+    @property
+    def winner_is_video(self) -> bool:
+        f = getattr(self, "winner_media", None)
+        return bool(f and getattr(f, "name", None) and self._is_video_name(f.name))
+
+    @property
+    def delivery_is_video(self) -> bool:
+        f = getattr(self, "delivery_media", None)
+        return bool(f and getattr(f, "name", None) and self._is_video_name(f.name))
 
     @property
     def is_finished(self) -> bool:
@@ -49,6 +152,10 @@ class Raffle(models.Model):
     @property
     def sold_tickets(self) -> int:
         # Tickets are created when purchases are approved.
+        # Use annotation (if present) to avoid N+1 queries in lists.
+        annotated = getattr(self, "sold_tickets_annot", None)
+        if annotated is not None:
+            return int(annotated or 0)
         return self.tickets.count()
 
     @property
@@ -70,7 +177,11 @@ class Raffle(models.Model):
         """
         if self.is_sold_out and self.is_active:
             self.is_active = False
-            self.save(update_fields=["is_active", "updated_at"])
+            if self.finished_at is None:
+                self.finished_at = timezone.now()
+                self.save(update_fields=["is_active", "finished_at", "updated_at"])
+            else:
+                self.save(update_fields=["is_active", "updated_at"])
 
     def get_active_offer(self):
         """
@@ -92,8 +203,16 @@ class TicketPurchase(models.Model):
 
     raffle = models.ForeignKey(Raffle, on_delete=models.PROTECT, related_name="purchases")
     full_name = models.CharField(max_length=200)
-    phone = models.CharField(max_length=40)
+    phone = models.CharField(max_length=40, db_index=True)
     email = models.EmailField(blank=True)
+    bank_account = models.ForeignKey(
+        "BankAccount",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="purchases",
+        help_text="Banco usado para la transferencia (seleccionado por el cliente).",
+    )
     quantity = models.PositiveIntegerField(validators=[MinValueValidator(1)], help_text="Boletos pagados.")
     bonus_quantity = models.PositiveIntegerField(default=0, help_text="Boletos de oferta (gratis).")
     total_tickets = models.PositiveIntegerField(default=0, help_text="Total de boletos asignados (pagados + oferta).")
@@ -116,6 +235,10 @@ class TicketPurchase(models.Model):
         verbose_name = "Compra de boleto"
         verbose_name_plural = "Compras de boletos"
         ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["raffle", "phone"], name="idx_purchase_raffle_phone"),
+            models.Index(fields=["status", "created_at"], name="idx_purchase_status_created"),
+        ]
 
     def __str__(self) -> str:
         return f"{self.full_name} - {self.raffle.title} ({self.quantity})"
@@ -239,6 +362,16 @@ class SiteContent(models.Model):
             "Transferencia bancaria / Depósito.\n"
             "Zelle.\n"
             "PayPal."
+        )
+    )
+
+    terms_title = models.CharField(max_length=120, default="Términos y condiciones")
+    terms_body = models.TextField(
+        default=(
+            "Al comprar boletos aceptas nuestros términos y condiciones.\n"
+            "La compra queda PENDIENTE hasta verificación del comprobante.\n"
+            "No se aceptan comprobantes ilegibles o alterados.\n"
+            "El sorteo se realiza en la fecha indicada en cada rifa."
         )
     )
 

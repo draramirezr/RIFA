@@ -6,7 +6,7 @@ from django import forms
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import InMemoryUploadedFile
 
-from .models import Raffle, TicketPurchase
+from .models import BankAccount, Raffle, TicketPurchase
 
 
 def validate_image_file(file):
@@ -102,10 +102,24 @@ PHONE_PREFIX_CHOICES = [
 class TicketPurchaseForm(forms.ModelForm):
     phone_prefix = forms.ChoiceField(choices=PHONE_PREFIX_CHOICES, label="Prefijo")
     phone_number = forms.CharField(max_length=15, label="Número")
+    bank_account = forms.ModelChoiceField(
+        queryset=BankAccount.objects.none(),
+        required=False,
+        widget=forms.HiddenInput(),
+        label="Banco",
+    )
+    accept_terms = forms.BooleanField(
+        required=True,
+        label="Acepto los términos y condiciones",
+    )
 
     def __init__(self, *args, raffle: Raffle | None = None, **kwargs):
         super().__init__(*args, **kwargs)
         self._raffle = raffle
+        active_banks = BankAccount.objects.filter(is_active=True).order_by("sort_order", "created_at")[:4]
+        self.fields["bank_account"].queryset = active_banks
+        # If there are active bank accounts, require selection.
+        self.fields["bank_account"].required = active_banks.exists()
         base_input = (
             "w-full rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3 "
             "text-slate-100 placeholder:text-slate-500 outline-none "
@@ -126,7 +140,10 @@ class TicketPurchaseForm(forms.ModelForm):
             "onpaste",
             "setTimeout(() => { this.value=this.value.replace(/[0-9]/g,'').toUpperCase(); }, 0)",
         )
+        # Email is required for purchases (admin notifications / customer follow-ups)
+        self.fields["email"].required = True
         self.fields["email"].widget.attrs.setdefault("class", base_input)
+        self.fields["email"].widget.attrs.setdefault("placeholder", "tu-correo@ejemplo.com")
         # Quantity is rendered with +/- buttons, so use group-friendly styling.
         self.fields["quantity"].widget.attrs.setdefault(
             "class",
@@ -169,7 +186,7 @@ class TicketPurchaseForm(forms.ModelForm):
 
     class Meta:
         model = TicketPurchase
-        fields = ["full_name", "email", "quantity", "proof_image"]
+        fields = ["full_name", "email", "bank_account", "quantity", "proof_image"]
         widgets = {
             "full_name": forms.TextInput(attrs={"autocomplete": "name"}),
             "email": forms.EmailInput(attrs={"autocomplete": "email"}),

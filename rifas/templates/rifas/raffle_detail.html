@@ -10,21 +10,34 @@
         Sorteo: <span class="text-slate-100">{{ raffle.draw_date|date:"d M Y, h:i a" }}</span>
       </div>
 
-      {% if raffle.image or raffle.images.all %}
+      {% if raffle.video or raffle.image or raffle.images.all %}
         <div class="mt-6">
           <div class="relative mx-auto max-w-sm sm:max-w-md">
             <div id="carousel"
                  class="flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-smooth pb-2 [-ms-overflow-style:none] [scrollbar-width:none]"
                  style="scrollbar-width: none;">
+              {% if raffle.video %}
+                <div class="snap-start shrink-0 w-full">
+                  <video
+                    class="aspect-[3/4] w-full rounded-2xl border border-white/10 object-cover bg-black/20"
+                    src="{{ raffle.video.url }}"
+                    controls
+                    playsinline
+                    preload="metadata"
+                  ></video>
+                </div>
+              {% endif %}
               {% if raffle.image %}
                 <div class="snap-start shrink-0 w-full">
                   <img src="{{ raffle.image.url }}" alt="{{ raffle.title }}"
+                       loading="lazy" decoding="async"
                        class="aspect-[3/4] w-full rounded-2xl border border-white/10 object-cover" />
                 </div>
               {% endif %}
               {% for img in raffle.images.all|slice:":3" %}
                 <div class="snap-start shrink-0 w-full">
                   <img src="{{ img.image.url }}" alt="{{ raffle.title }}"
+                       loading="lazy" decoding="async"
                        class="aspect-[3/4] w-full rounded-2xl border border-white/10 object-cover" />
                 </div>
               {% endfor %}
@@ -124,6 +137,9 @@
                 <li>🎟 Compra mínima: {{ raffle.min_purchase_quantity }} boletos pagados.</li>
               {% endif %}
               {% if offer %}
+                {% if offer.min_paid_quantity and offer.min_paid_quantity > 1 %}
+                  <li>🎯 Para aplicar la promoción: mínimo {{ offer.min_paid_quantity }} boletos pagados.</li>
+                {% endif %}
                 <li>🎁 Promoción: Por cada {{ offer.buy_quantity }} boletos pagados recibes {{ offer.bonus_quantity }} boleto gratis.</li>
               {% endif %}
             </ul>

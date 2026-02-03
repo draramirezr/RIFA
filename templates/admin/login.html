@@ -1,0 +1,90 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+
+{% block extrastyle %}{{ block.super }}
+  <link rel="stylesheet" href="{% static 'admin/css/login.css' %}">
+{% endblock %}
+
+{% block bodyclass %}{{ block.super }} login{% endblock %}
+
+{% block content %}
+  <div id="content-main">
+    {% if form.errors %}
+      <p class="errornote">
+        {% if form.errors.items|length == 1 %}{% translate "Por favor corrige el error de abajo." %}
+        {% else %}{% translate "Por favor corrige los errores de abajo." %}{% endif %}
+      </p>
+    {% endif %}
+
+    <form action="{{ app_path }}" method="post" id="login-form" novalidate>
+      {% csrf_token %}
+
+      <div class="form-row">
+        {{ form.username.errors }}
+        {{ form.username.label_tag }} {{ form.username }}
+      </div>
+
+      <div class="form-row">
+        {{ form.password.errors }}
+        <label for="{{ form.password.id_for_label }}">{% translate "Contraseña:" %}</label>
+        <div style="display:flex; gap:8px; align-items:center;">
+          {{ form.password }}
+          <button
+            type="button"
+            id="togglePassword"
+            class="button"
+            style="white-space:nowrap;"
+            aria-controls="id_password"
+            aria-pressed="false"
+          >
+            {% translate "Ver" %}
+          </button>
+        </div>
+      </div>
+
+      {% if next %}
+        <input type="hidden" name="next" value="{{ next }}">
+      {% endif %}
+
+      <div class="submit-row">
+        <input type="submit" value="{% translate 'Iniciar sesión' %}">
+      </div>
+
+      <div class="password-reset-link">
+        <p style="margin: 10px 0 0;">
+          <a href="{% url 'admin:password_reset' %}">{% translate "¿Olvidaste tu contraseña?" %}</a>
+        </p>
+        <p style="margin: 6px 0 0; color: #6b7280;">
+          {% translate "Después de iniciar sesión puedes cambiar tu contraseña aquí:" %}
+          <a href="{% url 'admin:password_change' %}">{% translate "Cambiar contraseña" %}</a>
+        </p>
+      </div>
+    </form>
+  </div>
+
+  <script>
+    (function () {
+      const password = document.getElementById("id_password");
+      const username = document.getElementById("id_username");
+      const btn = document.getElementById("togglePassword");
+      if (!password || !btn) return;
+
+      // Make browser password saving more reliable
+      if (username && !username.getAttribute("autocomplete")) username.setAttribute("autocomplete", "username");
+      if (!password.getAttribute("autocomplete")) password.setAttribute("autocomplete", "current-password");
+
+      function setState(show) {
+        password.type = show ? "text" : "password";
+        btn.textContent = show ? "{% translate 'Ocultar' %}" : "{% translate 'Ver' %}";
+        btn.setAttribute("aria-pressed", show ? "true" : "false");
+      }
+
+      let showing = false;
+      btn.addEventListener("click", function () {
+        showing = !showing;
+        setState(showing);
+      });
+    })();
+  </script>
+{% endblock %}
+
