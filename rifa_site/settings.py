@@ -186,7 +186,15 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / "staticfiles"
-STATICFILES_DIRS = [BASE_DIR / "static"] if (BASE_DIR / "static").exists() else []
+# Only collect compiled assets in production (avoid collecting Tailwind source files under static/src/)
+STATICFILES_DIRS = []
+_static_dist = BASE_DIR / "static" / "dist"
+if _static_dist.exists():
+    STATICFILES_DIRS.append(_static_dist)
+else:
+    _static = BASE_DIR / "static"
+    if _static.exists():
+        STATICFILES_DIRS.append(_static)
 
 # WhiteNoise (static files in production)
 STORAGES = {
