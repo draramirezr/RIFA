@@ -3,11 +3,6 @@
 {% block title %}Inicio{% endblock %}
 
 {% block content %}
-  <div class="mb-10">
-    <h1 class="text-3xl font-semibold tracking-tight">Inicio</h1>
-    <p class="mt-2 text-slate-300">Participa comprando boletos y subiendo tu comprobante de transferencia.</p>
-  </div>
-
   <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
     <section class="lg:col-span-2 space-y-6">
       <div class="rounded-2xl border border-white/10 bg-white/5 p-6">
@@ -66,20 +61,7 @@
       </div>
     </section>
 
-    <aside class="space-y-6">
-      <div class="rounded-2xl border border-white/10 bg-white/5 p-6">
-        <div class="text-lg font-semibold">{{ site.policy_title }}</div>
-        <p class="mt-2 whitespace-pre-line text-slate-300">{{ site.policy_body }}</p>
-      </div>
-
-      <div class="rounded-2xl border border-white/10 bg-white/5 p-6">
-        <div class="text-lg font-semibold">{{ site.payment_title }}</div>
-        <p class="mt-2 whitespace-pre-line text-slate-300">{{ site.payment_body }}</p>
-        <div class="mt-4 text-xs text-slate-400">
-          Nota: La compra queda pendiente hasta verificación del comprobante.
-        </div>
-      </div>
-    </aside>
+    <aside class="hidden lg:block"></aside>
   </div>
 {% endblock %}
 
