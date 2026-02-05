@@ -15,8 +15,11 @@
     body.login #content-main {
       float: none !important;
       width: auto !important;
-      max-width: 440px;
-      margin: 2rem auto;
+      /* Mobile-first: use most of the screen width */
+      width: min(92vw, 560px) !important;
+      max-width: 560px;
+      margin: 2.25rem auto;
+      padding: 0 12px;
     }
     body.login .form-row label {
       float: none !important;
@@ -40,6 +43,11 @@
     }
     #togglePassword.button {
       padding: .45rem .7rem;
+    }
+    @media (min-width: 900px) {
+      body.login #content-main {
+        width: min(520px, 92vw) !important;
+      }
     }
   </style>
 {% endblock %}

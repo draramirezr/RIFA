@@ -11,6 +11,8 @@ from .models import BankAccount, Raffle, RaffleImage, RaffleOffer, SiteContent, 
 admin.site.site_header = "Administración de Rifas"
 admin.site.site_title = "Admin - Rifas"
 admin.site.index_title = "Panel de administración"
+# Keep admin usable on mobile: disable the left nav sidebar.
+admin.site.enable_nav_sidebar = False
 
 
 class RaffleOfferInline(admin.TabularInline):
