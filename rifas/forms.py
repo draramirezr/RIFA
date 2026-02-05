@@ -116,10 +116,12 @@ class TicketPurchaseForm(forms.ModelForm):
     def __init__(self, *args, raffle: Raffle | None = None, **kwargs):
         super().__init__(*args, **kwargs)
         self._raffle = raffle
-        active_banks = BankAccount.objects.filter(is_active=True).order_by("sort_order", "created_at")[:4]
-        self.fields["bank_account"].queryset = active_banks
-        # If there are active bank accounts, require selection.
-        self.fields["bank_account"].required = active_banks.exists()
+        # Payment methods: accept posted IDs robustly and validate availability ourselves.
+        active_banks = BankAccount.objects.filter(is_active=True).order_by("sort_order", "created_at")
+        self._has_active_banks = active_banks.exists()
+        # Include all accounts in queryset so Django doesn't throw "invalid choice" before our clean_* runs.
+        self.fields["bank_account"].queryset = BankAccount.objects.all().order_by("sort_order", "created_at")
+        self.fields["bank_account"].required = self._has_active_banks
         base_input = (
             "w-full rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3 "
             "text-slate-100 placeholder:text-slate-500 outline-none "
@@ -228,6 +230,15 @@ class TicketPurchaseForm(forms.ModelForm):
         if raffle and qty < int(getattr(raffle, "min_purchase_quantity", 1) or 1):
             raise ValidationError(f"El mínimo de compra para esta rifa es {raffle.min_purchase_quantity} boletos.")
         return qty
+
+    def clean_bank_account(self):
+        bank = self.cleaned_data.get("bank_account")
+        if getattr(self, "_has_active_banks", False):
+            if not bank:
+                raise ValidationError("Selecciona un método de pago.")
+            if not getattr(bank, "is_active", False):
+                raise ValidationError("Ese método de pago no está disponible. Selecciona otro.")
+        return bank
 
     def save(self, commit=True):
         instance: TicketPurchase = super().save(commit=False)
