@@ -1,9 +1,11 @@
 from django.contrib import admin, messages
+from django.contrib.auth import get_user_model
+from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 from django.core.exceptions import ValidationError
 from django.utils.html import format_html
 from django.utils import timezone
 
-from .models import BankAccount, Raffle, RaffleImage, RaffleOffer, SiteContent, Ticket, TicketPurchase
+from .models import BankAccount, Raffle, RaffleImage, RaffleOffer, SiteContent, Ticket, TicketPurchase, UserSecurity
 
 # Admin UI (Spanish)
 admin.site.site_header = "Administración de Rifas"
@@ -243,3 +245,26 @@ class TicketAdmin(admin.ModelAdmin):
     list_display = ("raffle", "number", "purchase", "created_at")
     list_filter = ("raffle",)
     search_fields = ("purchase__full_name", "purchase__phone", "raffle__title")
+
+
+class UserSecurityInline(admin.StackedInline):
+    model = UserSecurity
+    can_delete = False
+    extra = 0
+    fields = ("force_password_change", "forced_at")
+    readonly_fields = ("forced_at",)
+    verbose_name_plural = "Seguridad"
+
+
+# Extend Django's User admin to include "force password change"
+User = get_user_model()
+try:
+    admin.site.unregister(User)
+except admin.sites.NotRegistered:
+    pass
+
+
+@admin.register(User)
+class UserAdmin(DjangoUserAdmin):
+    inlines = (UserSecurityInline,)
+

@@ -51,12 +51,18 @@
       </div>
 
       <div class="password-reset-link">
+        {% url 'admin_password_reset' as reset_url %}
+        {% url 'admin:password_change' as change_url %}
         <p style="margin: 10px 0 0;">
-          <a href="{% url 'admin:password_reset' %}">{% translate "¿Olvidaste tu contraseña?" %}</a>
+          {% if reset_url %}
+            <a href="{{ reset_url }}">{% translate "¿Olvidaste tu contraseña?" %}</a>
+          {% endif %}
         </p>
         <p style="margin: 6px 0 0; color: #6b7280;">
           {% translate "Después de iniciar sesión puedes cambiar tu contraseña aquí:" %}
-          <a href="{% url 'admin:password_change' %}">{% translate "Cambiar contraseña" %}</a>
+          {% if change_url %}
+            <a href="{{ change_url }}">{% translate "Cambiar contraseña" %}</a>
+          {% endif %}
         </p>
       </div>
     </form>

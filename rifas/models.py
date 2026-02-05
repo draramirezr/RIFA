@@ -4,6 +4,7 @@ from django.utils import timezone
 from django.utils.text import slugify
 import secrets
 from django.core.exceptions import ValidationError
+from django.conf import settings
 
 
 def validate_video_file(file):
@@ -331,6 +332,45 @@ class TicketPurchase(models.Model):
         self.admin_notes = notes
         self.decided_at = timezone.now()
         self.save(update_fields=["status", "admin_notes", "decided_at"])
+
+
+class UserSecurity(models.Model):
+    """
+    Flags for admin users security controls.
+    Used to force password change on next admin login.
+    """
+
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="security")
+    force_password_change = models.BooleanField(
+        default=False,
+        help_text="Si está activo, el usuario será obligado a cambiar su contraseña al entrar.",
+    )
+    password_hash_at_force = models.CharField(
+        max_length=128,
+        blank=True,
+        help_text="Hash de contraseña en el momento de activar el forzado (interno).",
+    )
+    forced_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Seguridad del usuario"
+        verbose_name_plural = "Seguridad de usuarios"
+
+    def __str__(self) -> str:
+        return f"Seguridad: {self.user}"
+
+    def save(self, *args, **kwargs):
+        # When forcing, remember current password hash to detect when it changes.
+        if self.force_password_change:
+            if not self.password_hash_at_force:
+                self.password_hash_at_force = getattr(self.user, "password", "") or ""
+            if self.forced_at is None:
+                self.forced_at = timezone.now()
+        else:
+            # Clear metadata when not forcing
+            self.password_hash_at_force = ""
+            self.forced_at = None
+        super().save(*args, **kwargs)
 
 
 class SiteContent(models.Model):
