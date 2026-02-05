@@ -16,17 +16,18 @@ def ffmpeg_available() -> bool:
 
 def should_transcode_to_mp4(uploaded) -> bool:
     """
-    Return True for formats that commonly fail to render video frames in browsers
-    (MOV/QuickTime, 3GP, etc.). MP4/WebM are usually fine, but some MP4s (HEVC)
-    can still fail; we keep this conservative.
+    Return True for uploads we want to normalize to MP4 (H.264) for maximum compatibility.
+
+    Note: Many mobile "MP4" files are actually HEVC/H.265; they can play audio but show no video
+    in some browsers. To avoid this, we transcode most non-WebM uploads to MP4/H.264.
     """
     name = (getattr(uploaded, "name", "") or "").lower()
     ctype = (getattr(uploaded, "content_type", "") or "").lower()
-    if ctype in {"video/quicktime", "video/3gpp", "video/3gpp2"}:
-        return True
-    if name.endswith((".mov", ".3gp", ".3g2", ".m4v")):
-        return True
-    return False
+    # Keep WebM as-is (already web-friendly and can be smaller).
+    if ctype == "video/webm" or name.endswith(".webm"):
+        return False
+    # Everything else: normalize to MP4/H.264
+    return True
 
 
 def transcode_to_mp4(
