@@ -248,6 +248,11 @@ STORAGES = {
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
+# Upload limits (videos/admin uploads can be large; handlers will stream to disk).
+# These guardrails prevent accidental huge posts, and can be tuned via env.
+DATA_UPLOAD_MAX_MEMORY_SIZE = int(os.environ.get("DATA_UPLOAD_MAX_MEMORY_SIZE", str(100 * 1024 * 1024)))  # 100MB
+FILE_UPLOAD_MAX_MEMORY_SIZE = int(os.environ.get("FILE_UPLOAD_MAX_MEMORY_SIZE", str(5 * 1024 * 1024)))  # 5MB (rest to temp files)
+
 # In production, serve ONLY public media via Django if enabled (Railway).
 # NOTE: This should be paired with a persistent volume mounted to MEDIA_ROOT.
 SERVE_PUBLIC_MEDIA = os.environ.get("SERVE_PUBLIC_MEDIA", "0") == "1"
