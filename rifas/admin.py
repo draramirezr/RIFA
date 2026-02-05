@@ -6,6 +6,7 @@ from django.utils.html import format_html
 from django.utils import timezone
 
 from .models import BankAccount, Raffle, RaffleImage, RaffleOffer, SiteContent, Ticket, TicketPurchase, UserSecurity
+from .video_transcode import should_transcode_to_mp4, transcode_to_mp4
 
 # Admin UI (Spanish)
 admin.site.site_header = "GanaHoyRD — Administración"
@@ -74,6 +75,17 @@ class RaffleAdmin(admin.ModelAdmin):
                 raise
             except Exception:
                 # Don't block admin save for metadata issues.
+                pass
+
+            # Transcode mobile formats (MOV/3GP) to MP4 for browser compatibility.
+            try:
+                uploaded = obj.video.file
+                if uploaded and should_transcode_to_mp4(uploaded):
+                    obj.video = transcode_to_mp4(uploaded, max_seconds=20, max_output_bytes=50 * 1024 * 1024)
+            except ValidationError:
+                raise
+            except Exception:
+                # If conversion fails unexpectedly, let validation handle content_type errors.
                 pass
         return super().save_model(request, obj, form, change)
 

@@ -16,17 +16,6 @@
             <div id="carousel"
                  class="flex snap-x snap-mandatory gap-4 overflow-x-auto scroll-smooth pb-2 [-ms-overflow-style:none] [scrollbar-width:none]"
                  style="scrollbar-width: none;">
-              {% if raffle.video %}
-                <div class="snap-start shrink-0 w-full">
-                  <video
-                    class="aspect-[3/4] w-full rounded-2xl border border-white/10 object-cover bg-black/20"
-                    src="{{ raffle.video.url }}"
-                    controls
-                    playsinline
-                    preload="metadata"
-                  ></video>
-                </div>
-              {% endif %}
               {% if raffle.image %}
                 <div class="snap-start shrink-0 w-full">
                   <img src="{{ raffle.image.url }}" alt="{{ raffle.title }}"
@@ -41,6 +30,18 @@
                        class="aspect-[3/4] w-full rounded-2xl border border-white/10 object-cover" />
                 </div>
               {% endfor %}
+              {% if raffle.video %}
+                <div class="snap-start shrink-0 w-full">
+                  <video
+                    class="aspect-[3/4] w-full rounded-2xl border border-white/10 object-cover bg-black/20"
+                    controls
+                    playsinline
+                    preload="metadata"
+                  >
+                    <source src="{{ raffle.video.url }}" />
+                  </video>
+                </div>
+              {% endif %}
             </div>
 
             <button type="button" id="prevBtn"
