@@ -10,11 +10,24 @@ from django.conf import settings
 def validate_video_file(file):
     """
     Basic validation for raffle promo videos.
-    Accepts MP4/WebM only. Duration is validated in admin/form (best effort).
+    Accepts common mobile formats (MP4/WebM/MOV). Duration is validated in admin/form (best effort).
     """
     content_type = getattr(file, "content_type", "") or ""
-    if content_type not in ("video/mp4", "video/webm"):
-        raise ValidationError("El video debe ser MP4 o WebM.")
+    name = (getattr(file, "name", "") or "").lower()
+    allowed_mimes = {
+        "video/mp4",
+        "video/webm",
+        "video/quicktime",  # .mov (iPhone/Android sometimes)
+        "video/x-m4v",      # .m4v
+        "video/3gpp",       # .3gp
+        "video/3gpp2",      # .3g2
+    }
+    allowed_exts = (".mp4", ".webm", ".mov", ".m4v", ".3gp", ".3g2")
+    mime_ok = content_type in allowed_mimes
+    ext_ok = any(name.endswith(ext) for ext in allowed_exts)
+    # Some devices/browsers send empty or generic content types.
+    if not (mime_ok or ext_ok):
+        raise ValidationError("El video debe ser MP4, WebM o MOV.")
 
     # Reasonable hard size limit to protect server resources (duration is separate)
     hard_limit = 50 * 1024 * 1024  # 50MB
@@ -34,12 +47,22 @@ def validate_history_media_file(file):
         if getattr(file, "size", 0) > hard_limit:
             raise ValidationError("La imagen es demasiado grande (máximo 25MB).")
         return
-    if content_type in ("video/mp4", "video/webm"):
+    name = (getattr(file, "name", "") or "").lower()
+    allowed_mimes = {
+        "video/mp4",
+        "video/webm",
+        "video/quicktime",
+        "video/x-m4v",
+        "video/3gpp",
+        "video/3gpp2",
+    }
+    allowed_exts = (".mp4", ".webm", ".mov", ".m4v", ".3gp", ".3g2")
+    if content_type in allowed_mimes or any(name.endswith(ext) for ext in allowed_exts):
         hard_limit = 80 * 1024 * 1024  # 80MB
         if getattr(file, "size", 0) > hard_limit:
             raise ValidationError("El video es demasiado grande (máximo 80MB).")
         return
-    raise ValidationError("El archivo debe ser una imagen o un video (MP4/WebM).")
+    raise ValidationError("El archivo debe ser una imagen o un video (MP4/WebM/MOV).")
 
 
 class Raffle(models.Model):
@@ -60,7 +83,7 @@ class Raffle(models.Model):
         blank=True,
         null=True,
         validators=[validate_video_file],
-        help_text="Opcional. Video promocional (MP4/WebM, máximo 20 segundos).",
+        help_text="Opcional. Video promocional (MP4/WebM/MOV, máximo 20 segundos).",
     )
     # History (post-finish)
     show_in_history = models.BooleanField(
