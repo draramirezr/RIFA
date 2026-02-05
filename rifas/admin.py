@@ -192,22 +192,30 @@ class TicketPurchaseAdmin(admin.ModelAdmin):
 
     @admin.display(description="Comprobante")
     def proof_link(self, obj: TicketPurchase):
-        if not getattr(obj, "proof_image", None):
+        f = getattr(obj, "proof_image", None)
+        if not f or not getattr(f, "name", ""):
             return "—"
         try:
-            url = obj.proof_image.url
+            # If the DB points to a missing file (common on Railway without a Volume),
+            # don't show a broken link.
+            if not f.storage.exists(f.name):
+                return "No disponible"
+            url = f.url
         except Exception:
-            return "—"
+            return "No disponible"
         return format_html('<a href="{}" target="_blank" rel="noopener">Ver</a>', url)
 
     @admin.display(description="Vista previa del comprobante")
     def proof_preview(self, obj: TicketPurchase):
-        if not getattr(obj, "proof_image", None):
+        f = getattr(obj, "proof_image", None)
+        if not f or not getattr(f, "name", ""):
             return "—"
         try:
-            url = obj.proof_image.url
+            if not f.storage.exists(f.name):
+                return "No disponible"
+            url = f.url
         except Exception:
-            return "—"
+            return "No disponible"
         return format_html(
             '<a href="{0}" target="_blank" rel="noopener">'
             '<img src="{0}" alt="comprobante" style="max-width:360px; width:100%; border-radius:12px; border:1px solid rgba(255,255,255,.15);" />'

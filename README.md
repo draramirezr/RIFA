@@ -75,7 +75,7 @@ $env:EMAIL_PORT="587"
 $env:EMAIL_HOST_USER="usuario"
 $env:EMAIL_HOST_PASSWORD="password"
 $env:EMAIL_USE_TLS="1"
-$env:DEFAULT_FROM_EMAIL="Rifas <no-reply@tudominio.com>"
+$env:DEFAULT_FROM_EMAIL="GanaHoyRD <no-reply@tudominio.com>"
 ```
 
 ## Tailwind (sin CDN, listo para producción)
