@@ -1,4 +1,4 @@
-# Sistema de Rifas (Django)
+# GanaHoyRD (Django)
 
 Web moderna para publicar rifas y permitir que el cliente **compre boletos** subiendo la **foto del comprobante de transferencia**. Incluye panel `/admin/` para gestionar rifas y aprobar compras.
 

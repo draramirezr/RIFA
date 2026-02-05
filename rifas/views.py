@@ -175,7 +175,7 @@ def admin_password_reset(request):
             sec.forced_at = None  # will be set by model save
             sec.save()
 
-            subject = "Recuperación de contraseña (Admin) - Sistema de Rifas"
+            subject = "Recuperación de contraseña (Admin) - GanaHoyRD"
             body = (
                 "Se solicitó recuperación de contraseña para el panel administrador.\n\n"
                 f"Usuario: {getattr(user, 'username', '')}\n"

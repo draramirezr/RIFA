@@ -8,8 +8,8 @@ from django.utils import timezone
 from .models import BankAccount, Raffle, RaffleImage, RaffleOffer, SiteContent, Ticket, TicketPurchase, UserSecurity
 
 # Admin UI (Spanish)
-admin.site.site_header = "Administración de Rifas"
-admin.site.site_title = "Admin - Rifas"
+admin.site.site_header = "GanaHoyRD — Administración"
+admin.site.site_title = "GanaHoyRD — Admin"
 admin.site.index_title = "Panel de administración"
 # Keep admin usable on mobile: disable the left nav sidebar.
 admin.site.enable_nav_sidebar = False

@@ -45,6 +45,18 @@
       align-items: center;
       flex-wrap: wrap;
     }
+
+    /* Admin dashboard: make "Acciones recientes" collapsible */
+    body.dashboard #recent-actions-module .recent-actions-toggle {
+      float: right;
+      font-size: 12px;
+      padding: 2px 8px;
+      line-height: 1.8;
+      margin-top: -2px;
+    }
+    body.dashboard #recent-actions-module.is-collapsed .recent-actions-body {
+      display: none;
+    }
   </style>
 {% endblock %}
 
@@ -57,7 +69,56 @@
         else fn();
       }
       onReady(function () {
-        if (!document.body || !document.body.classList.contains("login")) return;
+        if (!document.body) return;
+
+        // Dashboard: collapsible recent actions
+        if (document.body.classList.contains("dashboard")) {
+          const module =
+            document.getElementById("recent-actions-module") ||
+            document.querySelector("#recent-actions-module.module") ||
+            document.querySelector(".module#recent-actions-module");
+
+          if (module) {
+            const h2 = module.querySelector("h2");
+            // Wrap body (everything except h2) so we can hide/show cleanly
+            let body = module.querySelector(":scope > .recent-actions-body");
+            if (!body) {
+              body = document.createElement("div");
+              body.className = "recent-actions-body";
+              const toMove = [];
+              Array.from(module.children).forEach((ch) => {
+                if (h2 && ch === h2) return;
+                toMove.push(ch);
+              });
+              toMove.forEach((ch) => body.appendChild(ch));
+              module.appendChild(body);
+            }
+
+            const key = "admin_recent_actions_collapsed";
+            const initialCollapsed =
+              (localStorage.getItem(key) === "1") ||
+              (localStorage.getItem(key) === null && window.matchMedia && window.matchMedia("(max-width: 520px)").matches);
+
+            function setCollapsed(collapsed) {
+              module.classList.toggle("is-collapsed", collapsed);
+              localStorage.setItem(key, collapsed ? "1" : "0");
+              if (btn) btn.textContent = collapsed ? "{% translate 'Mostrar' %}" : "{% translate 'Ocultar' %}";
+            }
+
+            let btn = module.querySelector(".recent-actions-toggle");
+            if (!btn && h2) {
+              btn = document.createElement("button");
+              btn.type = "button";
+              btn.className = "button recent-actions-toggle";
+              h2.appendChild(btn);
+              btn.addEventListener("click", () => setCollapsed(!module.classList.contains("is-collapsed")));
+            }
+            setCollapsed(initialCollapsed);
+          }
+        }
+
+        // Login: show/hide password
+        if (!document.body.classList.contains("login")) return;
 
         const username = document.getElementById("id_username");
         const password = document.getElementById("id_password");
