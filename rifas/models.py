@@ -83,7 +83,7 @@ class Raffle(models.Model):
         blank=True,
         null=True,
         validators=[validate_video_file],
-        help_text="Opcional. Video promocional (MP4/WebM/MOV, máximo 20 segundos).",
+        help_text="Opcional. Video promocional (MP4/MOV recomendado en H.264, máximo 20 segundos).",
     )
     # History (post-finish)
     show_in_history = models.BooleanField(

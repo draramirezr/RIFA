@@ -7,7 +7,6 @@ from django.utils.html import format_html
 from django.utils import timezone
 
 from .models import BankAccount, Customer, Raffle, RaffleImage, RaffleOffer, SiteContent, Ticket, TicketPurchase, UserSecurity
-from .video_transcode import ffmpeg_available, should_transcode_to_mp4, transcode_to_mp4
 
 # Admin UI (Spanish)
 admin.site.site_header = "GanaHoyRD — Administración"
@@ -46,7 +45,7 @@ class RaffleAdmin(admin.ModelAdmin):
     search_fields = ("title", "slug")
     prepopulated_fields = {"slug": ("title",)}
     inlines = [RaffleImageInline, RaffleOfferInline]
-    actions = ["show_in_history_action", "hide_from_history_action", "transcode_videos_action"]
+    actions = ["show_in_history_action", "hide_from_history_action"]
 
     @admin.action(description="Mostrar en historial")
     def show_in_history_action(self, request, queryset):
@@ -55,45 +54,6 @@ class RaffleAdmin(admin.ModelAdmin):
     @admin.action(description="Ocultar del historial")
     def hide_from_history_action(self, request, queryset):
         queryset.update(show_in_history=False)
-
-    @admin.action(description="Convertir videos a MP4 (H.264)")
-    def transcode_videos_action(self, request, queryset):
-        if not ffmpeg_available():
-            messages.error(
-                request,
-                "ffmpeg no está disponible en el servidor. En Railway confirma `NIXPACKS_PKGS=ffmpeg` y haz Redeploy (rebuild).",
-            )
-            return
-        ok = 0
-        skipped = 0
-        failed = 0
-        for obj in queryset:
-            if not getattr(obj, "video", None) or not getattr(obj.video, "name", ""):
-                skipped += 1
-                continue
-            try:
-                # Force conversion for best compatibility.
-                obj.video.open("rb")
-                obj.video = transcode_to_mp4(obj.video.file, max_seconds=20, max_output_bytes=50 * 1024 * 1024)
-                obj.save(update_fields=["video", "updated_at"])
-                ok += 1
-            except ValidationError as e:
-                failed += 1
-                messages.error(request, f"No se pudo convertir '{obj.title}': {e}")
-            except Exception as e:
-                failed += 1
-                messages.error(request, f"Error convirtiendo '{obj.title}': {e}")
-            finally:
-                try:
-                    obj.video.close()
-                except Exception:
-                    pass
-        if ok:
-            messages.success(request, f"Videos convertidos: {ok}.")
-        if skipped:
-            messages.info(request, f"Sin video (omitidos): {skipped}.")
-        if failed:
-            messages.warning(request, f"Fallidos: {failed}.")
 
     def save_model(self, request, obj, form, change):
         # Best-effort: validate raffle video duration <= 20s using metadata.
@@ -117,24 +77,7 @@ class RaffleAdmin(admin.ModelAdmin):
                 # Don't block admin save for metadata issues.
                 pass
 
-            # Transcode on NEW uploads only (avoids re-encoding on every save).
-            try:
-                if hasattr(form, "changed_data") and "video" in (form.changed_data or []):
-                    uploaded = obj.video.file
-                    if uploaded and should_transcode_to_mp4(uploaded):
-                        if not ffmpeg_available():
-                            messages.warning(
-                                request,
-                                "Video guardado, pero no se pudo convertir a MP4 porque ffmpeg no está disponible. "
-                                "En Railway confirma `NIXPACKS_PKGS=ffmpeg` y haz Redeploy (rebuild).",
-                            )
-                        else:
-                            obj.video = transcode_to_mp4(uploaded, max_seconds=20, max_output_bytes=50 * 1024 * 1024)
-            except ValidationError:
-                raise
-            except Exception:
-                # If conversion fails unexpectedly, let validation handle content_type errors.
-                pass
+            # No transcoding: you will upload MP4/MOV already compatible.
         return super().save_model(request, obj, form, change)
 
     @admin.display(description="Boletos (vendidos/total)")
