@@ -7,7 +7,7 @@ from django.utils.html import format_html
 from django.utils import timezone
 
 from .models import BankAccount, Customer, Raffle, RaffleImage, RaffleOffer, SiteContent, Ticket, TicketPurchase, UserSecurity
-from .video_transcode import should_transcode_to_mp4, transcode_to_mp4
+from .video_transcode import ffmpeg_available, should_transcode_to_mp4, transcode_to_mp4
 
 # Admin UI (Spanish)
 admin.site.site_header = "GanaHoyRD — Administración"
@@ -58,6 +58,12 @@ class RaffleAdmin(admin.ModelAdmin):
 
     @admin.action(description="Convertir videos a MP4 (H.264)")
     def transcode_videos_action(self, request, queryset):
+        if not ffmpeg_available():
+            messages.error(
+                request,
+                "ffmpeg no está disponible en el servidor. En Railway confirma `NIXPACKS_PKGS=ffmpeg` y haz Redeploy (rebuild).",
+            )
+            return
         ok = 0
         skipped = 0
         failed = 0
@@ -116,7 +122,14 @@ class RaffleAdmin(admin.ModelAdmin):
                 if hasattr(form, "changed_data") and "video" in (form.changed_data or []):
                     uploaded = obj.video.file
                     if uploaded and should_transcode_to_mp4(uploaded):
-                        obj.video = transcode_to_mp4(uploaded, max_seconds=20, max_output_bytes=50 * 1024 * 1024)
+                        if not ffmpeg_available():
+                            messages.warning(
+                                request,
+                                "Video guardado, pero no se pudo convertir a MP4 porque ffmpeg no está disponible. "
+                                "En Railway confirma `NIXPACKS_PKGS=ffmpeg` y haz Redeploy (rebuild).",
+                            )
+                        else:
+                            obj.video = transcode_to_mp4(uploaded, max_seconds=20, max_output_bytes=50 * 1024 * 1024)
             except ValidationError:
                 raise
             except Exception:
@@ -313,17 +326,8 @@ def export_customers_xlsx(modeladmin, request, queryset):
     ws = wb.active
     ws.title = "Clientes"
 
-    headers = [
-        "Nombre",
-        "Teléfono",
-        "Email",
-        "Compras",
-        "Boletos pagados",
-        "Boletos gratis",
-        "Total (RD$)",
-        "Primera compra",
-        "Última compra",
-    ]
+    # Export only customer profile data (no purchase metrics)
+    headers = ["Nombre", "Teléfono", "Email", "Creado", "Actualizado"]
     ws.append(headers)
 
     for c in queryset.order_by("-last_purchase_at", "-updated_at").iterator(chunk_size=1000):
@@ -332,12 +336,8 @@ def export_customers_xlsx(modeladmin, request, queryset):
                 c.full_name,
                 c.phone,
                 c.email,
-                c.total_purchases,
-                c.total_paid_tickets,
-                c.total_bonus_tickets,
-                c.total_amount,
-                c.first_purchase_at.isoformat(sep=" ", timespec="seconds") if c.first_purchase_at else "",
-                c.last_purchase_at.isoformat(sep=" ", timespec="seconds") if c.last_purchase_at else "",
+                c.created_at.isoformat(sep=" ", timespec="seconds") if c.created_at else "",
+                c.updated_at.isoformat(sep=" ", timespec="seconds") if c.updated_at else "",
             ]
         )
 
@@ -351,19 +351,9 @@ def export_customers_xlsx(modeladmin, request, queryset):
 
 @admin.register(Customer)
 class CustomerAdmin(admin.ModelAdmin):
-    list_display = (
-        "full_name",
-        "phone",
-        "email",
-        "total_purchases",
-        "total_paid_tickets",
-        "total_bonus_tickets",
-        "total_amount",
-        "last_purchase_at",
-        "updated_at",
-    )
+    list_display = ("full_name", "phone", "email", "created_at", "updated_at")
     search_fields = ("full_name", "phone", "email")
-    list_filter = ("last_purchase_at",)
+    list_filter = ("created_at",)
     actions = [export_customers_xlsx]
 
 
