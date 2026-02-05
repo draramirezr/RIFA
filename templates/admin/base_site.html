@@ -1,0 +1,100 @@
+{% extends "admin/base.html" %}
+{% load i18n %}
+
+{# Minimal override of Django admin base_site to inject login-only responsive tweaks #}
+
+{% block title %}{{ title }} | {{ site_title|default:_("Administración") }}{% endblock %}
+
+{% block extrastyle %}
+  {{ block.super }}
+  <style>
+    /* Apply ONLY on admin login */
+    body.login #nav-sidebar,
+    body.login #toggle-nav-sidebar {
+      display: none !important;
+    }
+    body.login #content {
+      margin-left: 0 !important;
+    }
+    body.login #content-main {
+      float: none !important;
+      width: min(92vw, 560px) !important;
+      max-width: 560px;
+      margin: 2.25rem auto;
+      padding: 0 12px;
+    }
+    @media (min-width: 900px) {
+      body.login #content-main {
+        width: min(520px, 92vw) !important;
+      }
+    }
+    body.login .form-row label {
+      float: none !important;
+      width: auto !important;
+      display: block;
+      margin: 0 0 .35rem;
+    }
+    body.login .form-row input[type="text"],
+    body.login .form-row input[type="password"] {
+      width: 100% !important;
+      box-sizing: border-box;
+    }
+    body.login .submit-row {
+      display: flex;
+      gap: .75rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+  </style>
+{% endblock %}
+
+{% block extrahead %}
+  {{ block.super }}
+  <script>
+    (function () {
+      function onReady(fn) {
+        if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", fn);
+        else fn();
+      }
+      onReady(function () {
+        if (!document.body || !document.body.classList.contains("login")) return;
+
+        const username = document.getElementById("id_username");
+        const password = document.getElementById("id_password");
+        if (!password) return;
+
+        // Help browsers save passwords
+        if (username && !username.getAttribute("autocomplete")) username.setAttribute("autocomplete", "username");
+        if (!password.getAttribute("autocomplete")) password.setAttribute("autocomplete", "current-password");
+
+        // Add a simple show/hide button if it doesn't exist
+        if (document.getElementById("togglePassword")) return;
+
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.id = "togglePassword";
+        btn.className = "button";
+        btn.style.marginLeft = "8px";
+        btn.textContent = "{% translate 'Ver' %}";
+
+        let showing = false;
+        btn.addEventListener("click", function () {
+          showing = !showing;
+          password.type = showing ? "text" : "password";
+          btn.textContent = showing ? "{% translate 'Ocultar' %}" : "{% translate 'Ver' %}";
+        });
+
+        password.insertAdjacentElement("afterend", btn);
+      });
+    })();
+  </script>
+{% endblock %}
+
+{% block branding %}
+  <h1 id="site-name">
+    <a href="{% url 'admin:index' %}">{{ site_header|default:_("Administración") }}</a>
+  </h1>
+{% endblock %}
+
+{% block nav-global %}{% endblock %}
+
