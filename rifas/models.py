@@ -476,6 +476,23 @@ class Ticket(models.Model):
     def __str__(self) -> str:
         return f"{self.raffle.title} - #{self.number}"
 
+    @property
+    def display_number(self) -> str:
+        """
+        Human-friendly ticket number with left zero padding.
+        Width is derived from raffle.max_tickets, with a minimum of 3 digits:
+        - max_tickets <= 999  -> 001, 002, ...
+        - max_tickets >= 1000 -> 0001, 0002, ...
+        """
+        try:
+            max_tickets = int(getattr(self.raffle, "max_tickets", 0) or 0)
+        except Exception:
+            max_tickets = 0
+        width = max(3, len(str(max_tickets))) if max_tickets else 0
+        if width:
+            return f"{int(self.number):0{width}d}"
+        return str(self.number)
+
 
 class RaffleImage(models.Model):
     raffle = models.ForeignKey(Raffle, on_delete=models.CASCADE, related_name="images")
