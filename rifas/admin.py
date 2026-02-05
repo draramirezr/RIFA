@@ -2,10 +2,11 @@ from django.contrib import admin, messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 from django.core.exceptions import ValidationError
+from django.http import HttpResponse
 from django.utils.html import format_html
 from django.utils import timezone
 
-from .models import BankAccount, Raffle, RaffleImage, RaffleOffer, SiteContent, Ticket, TicketPurchase, UserSecurity
+from .models import BankAccount, Customer, Raffle, RaffleImage, RaffleOffer, SiteContent, Ticket, TicketPurchase, UserSecurity
 from .video_transcode import should_transcode_to_mp4, transcode_to_mp4
 
 # Admin UI (Spanish)
@@ -45,7 +46,7 @@ class RaffleAdmin(admin.ModelAdmin):
     search_fields = ("title", "slug")
     prepopulated_fields = {"slug": ("title",)}
     inlines = [RaffleImageInline, RaffleOfferInline]
-    actions = ["show_in_history_action", "hide_from_history_action"]
+    actions = ["show_in_history_action", "hide_from_history_action", "transcode_videos_action"]
 
     @admin.action(description="Mostrar en historial")
     def show_in_history_action(self, request, queryset):
@@ -54,6 +55,39 @@ class RaffleAdmin(admin.ModelAdmin):
     @admin.action(description="Ocultar del historial")
     def hide_from_history_action(self, request, queryset):
         queryset.update(show_in_history=False)
+
+    @admin.action(description="Convertir videos a MP4 (H.264)")
+    def transcode_videos_action(self, request, queryset):
+        ok = 0
+        skipped = 0
+        failed = 0
+        for obj in queryset:
+            if not getattr(obj, "video", None) or not getattr(obj.video, "name", ""):
+                skipped += 1
+                continue
+            try:
+                # Force conversion for best compatibility.
+                obj.video.open("rb")
+                obj.video = transcode_to_mp4(obj.video.file, max_seconds=20, max_output_bytes=50 * 1024 * 1024)
+                obj.save(update_fields=["video", "updated_at"])
+                ok += 1
+            except ValidationError as e:
+                failed += 1
+                messages.error(request, f"No se pudo convertir '{obj.title}': {e}")
+            except Exception as e:
+                failed += 1
+                messages.error(request, f"Error convirtiendo '{obj.title}': {e}")
+            finally:
+                try:
+                    obj.video.close()
+                except Exception:
+                    pass
+        if ok:
+            messages.success(request, f"Videos convertidos: {ok}.")
+        if skipped:
+            messages.info(request, f"Sin video (omitidos): {skipped}.")
+        if failed:
+            messages.warning(request, f"Fallidos: {failed}.")
 
     def save_model(self, request, obj, form, change):
         # Best-effort: validate raffle video duration <= 20s using metadata.
@@ -77,11 +111,12 @@ class RaffleAdmin(admin.ModelAdmin):
                 # Don't block admin save for metadata issues.
                 pass
 
-            # Transcode mobile formats (MOV/3GP) to MP4 for browser compatibility.
+            # Transcode on NEW uploads only (avoids re-encoding on every save).
             try:
-                uploaded = obj.video.file
-                if uploaded and should_transcode_to_mp4(uploaded):
-                    obj.video = transcode_to_mp4(uploaded, max_seconds=20, max_output_bytes=50 * 1024 * 1024)
+                if hasattr(form, "changed_data") and "video" in (form.changed_data or []):
+                    uploaded = obj.video.file
+                    if uploaded and should_transcode_to_mp4(uploaded):
+                        obj.video = transcode_to_mp4(uploaded, max_seconds=20, max_output_bytes=50 * 1024 * 1024)
             except ValidationError:
                 raise
             except Exception:
@@ -262,11 +297,102 @@ class BankAccountAdmin(admin.ModelAdmin):
     search_fields = ("bank_name", "account_number")
 
 
+@admin.action(description="Exportar a Excel (.xlsx)")
+def export_customers_xlsx(modeladmin, request, queryset):
+    try:
+        import openpyxl  # type: ignore
+    except Exception:
+        modeladmin.message_user(
+            request,
+            "Falta la dependencia openpyxl para exportar a Excel.",
+            level=messages.ERROR,
+        )
+        return None
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Clientes"
+
+    headers = [
+        "Nombre",
+        "Teléfono",
+        "Email",
+        "Compras",
+        "Boletos pagados",
+        "Boletos gratis",
+        "Total (RD$)",
+        "Primera compra",
+        "Última compra",
+    ]
+    ws.append(headers)
+
+    for c in queryset.order_by("-last_purchase_at", "-updated_at").iterator(chunk_size=1000):
+        ws.append(
+            [
+                c.full_name,
+                c.phone,
+                c.email,
+                c.total_purchases,
+                c.total_paid_tickets,
+                c.total_bonus_tickets,
+                c.total_amount,
+                c.first_purchase_at.isoformat(sep=" ", timespec="seconds") if c.first_purchase_at else "",
+                c.last_purchase_at.isoformat(sep=" ", timespec="seconds") if c.last_purchase_at else "",
+            ]
+        )
+
+    resp = HttpResponse(
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    resp["Content-Disposition"] = 'attachment; filename="clientes_ganahoyrd.xlsx"'
+    wb.save(resp)
+    return resp
+
+
+@admin.register(Customer)
+class CustomerAdmin(admin.ModelAdmin):
+    list_display = (
+        "full_name",
+        "phone",
+        "email",
+        "total_purchases",
+        "total_paid_tickets",
+        "total_bonus_tickets",
+        "total_amount",
+        "last_purchase_at",
+        "updated_at",
+    )
+    search_fields = ("full_name", "phone", "email")
+    list_filter = ("last_purchase_at",)
+    actions = [export_customers_xlsx]
+
+
 @admin.register(Ticket)
 class TicketAdmin(admin.ModelAdmin):
-    list_display = ("raffle", "number", "purchase", "created_at")
+    list_display = ("raffle", "number_display", "purchase", "created_at")
     list_filter = ("raffle",)
-    search_fields = ("purchase__full_name", "purchase__phone", "raffle__title")
+    search_fields = ("purchase__full_name", "purchase__phone", "purchase__email", "raffle__title")
+    list_select_related = ("raffle", "purchase")
+
+    @admin.display(description="Boleto")
+    def number_display(self, obj: Ticket):
+        return obj.display_number
+
+    def get_search_results(self, request, queryset, search_term):
+        qs, use_distinct = super().get_search_results(request, queryset, search_term)
+        term = (search_term or "").strip()
+        digits = "".join(ch for ch in term if ch.isdigit())
+        # Search by ticket number (accept 001/0001/etc.)
+        if digits:
+            try:
+                n = int(digits)
+                qs = qs | queryset.filter(number=n)
+            except Exception:
+                pass
+        # Search by phone digits (ignore separators)
+        if len(digits) >= 7:
+            qs = qs | queryset.filter(purchase__phone__icontains=digits)
+        return qs, use_distinct
 
 
 class UserSecurityInline(admin.StackedInline):

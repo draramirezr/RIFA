@@ -357,6 +357,89 @@ class TicketPurchase(models.Model):
         self.save(update_fields=["status", "admin_notes", "decided_at"])
 
 
+class Customer(models.Model):
+    """
+    Cliente (para campañas futuras).
+    Se alimenta automáticamente desde las compras (TicketPurchase).
+    """
+
+    phone = models.CharField(max_length=40, unique=True, db_index=True)
+    full_name = models.CharField(max_length=200, blank=True)
+    email = models.EmailField(blank=True)
+
+    first_purchase_at = models.DateTimeField(null=True, blank=True)
+    last_purchase_at = models.DateTimeField(null=True, blank=True)
+    total_purchases = models.PositiveIntegerField(default=0)
+    total_paid_tickets = models.PositiveIntegerField(default=0)
+    total_bonus_tickets = models.PositiveIntegerField(default=0)
+    total_amount = models.PositiveIntegerField(default=0)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Cliente"
+        verbose_name_plural = "Clientes"
+        indexes = [
+            models.Index(fields=["email"], name="idx_customer_email"),
+            models.Index(fields=["last_purchase_at"], name="idx_customer_last_purchase"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.full_name or self.phone}"
+
+    @classmethod
+    def upsert_from_purchase(cls, purchase: "TicketPurchase") -> "Customer":
+        phone = (getattr(purchase, "phone", "") or "").strip()
+        if not phone:
+            raise ValueError("La compra no tiene teléfono.")
+
+        defaults = {
+            "full_name": (getattr(purchase, "full_name", "") or "").strip(),
+            "email": (getattr(purchase, "email", "") or "").strip(),
+        }
+        obj, created = cls.objects.get_or_create(phone=phone, defaults=defaults)
+
+        # Update customer profile with latest known data (do not overwrite with blanks)
+        changed = False
+        if defaults["full_name"] and obj.full_name != defaults["full_name"]:
+            obj.full_name = defaults["full_name"]
+            changed = True
+        if defaults["email"] and obj.email != defaults["email"]:
+            obj.email = defaults["email"]
+            changed = True
+
+        # Aggregate stats
+        created_at = getattr(purchase, "created_at", None)
+        if created_at:
+            if obj.first_purchase_at is None or created_at < obj.first_purchase_at:
+                obj.first_purchase_at = created_at
+                changed = True
+            if obj.last_purchase_at is None or created_at > obj.last_purchase_at:
+                obj.last_purchase_at = created_at
+                changed = True
+
+        # Recompute aggregates from DB for correctness (fast enough per save; indexed).
+        agg = (
+            TicketPurchase.objects.filter(phone=phone)
+            .aggregate(
+                total_purchases=models.Count("id"),
+                total_paid=models.Sum("quantity"),
+                total_bonus=models.Sum("bonus_quantity"),
+                total_amount=models.Sum("total_amount"),
+            )
+        )
+        obj.total_purchases = int(agg.get("total_purchases") or 0)
+        obj.total_paid_tickets = int(agg.get("total_paid") or 0)
+        obj.total_bonus_tickets = int(agg.get("total_bonus") or 0)
+        obj.total_amount = int(agg.get("total_amount") or 0)
+        changed = True
+
+        if changed:
+            obj.save()
+        return obj
+
+
 class UserSecurity(models.Model):
     """
     Flags for admin users security controls.
