@@ -20,8 +20,11 @@ from django.contrib import admin
 from django.urls import include, path
 
 from rifas.media_views import media_serve
+from rifas import views as rifas_views
 
 urlpatterns = [
+    # Admin password recovery (must be BEFORE admin.site.urls)
+    path("admin/password-reset/", rifas_views.admin_password_reset, name="admin_password_reset"),
     path('admin/', admin.site.urls),
     path('', include('rifas.urls')),
 ]

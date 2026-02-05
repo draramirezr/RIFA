@@ -4,9 +4,17 @@ from django.db import models
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
-from .forms import TicketLookupForm, TicketPurchaseForm
+import secrets
+
+from django.contrib import messages
+from django.contrib.auth import get_user_model
+from django.core.cache import cache
+from django.core.mail import send_mail
+from django.utils.translation import gettext as _
+
+from .forms import AdminPasswordRecoverForm, TicketLookupForm, TicketPurchaseForm
 from .emails import send_purchase_notification
-from .models import BankAccount, Raffle, SiteContent, TicketPurchase
+from .models import BankAccount, Raffle, SiteContent, TicketPurchase, UserSecurity
 
 
 def home(request):
@@ -112,3 +120,78 @@ def raffle_history(request):
 def terms(request):
     site = SiteContent.get_solo()
     return render(request, "rifas/terms.html", {"site": site})
+
+
+@require_http_methods(["GET", "POST"])
+def admin_password_reset(request):
+    """
+    Admin password recovery:
+    - User submits email
+    - If a staff user exists, we generate a temporary password and email it
+    - Force password change at next admin login
+
+    Security:
+    - Same response whether user exists or not
+    - Basic throttling by IP + email (best-effort)
+    """
+    form = AdminPasswordRecoverForm(request.POST or None)
+
+    if request.method == "POST" and form.is_valid():
+        email = (form.cleaned_data["email"] or "").strip().lower()
+        ip = (request.META.get("HTTP_X_REAL_IP") or request.META.get("REMOTE_ADDR") or "unknown").strip()
+
+        # Throttle: 5 attempts per 10 minutes per IP and per email
+        ip_key = f"pwreset:ip:{ip}"
+        em_key = f"pwreset:em:{email}"
+        for key in (ip_key, em_key):
+            n = int(cache.get(key, 0) or 0)
+            if n >= 5:
+                messages.error(request, _("Demasiados intentos. Intenta de nuevo en unos minutos."))
+                return render(request, "admin/password_reset.html", {"form": form})
+        cache.set(ip_key, int(cache.get(ip_key, 0) or 0) + 1, 600)
+        cache.set(em_key, int(cache.get(em_key, 0) or 0) + 1, 600)
+
+        User = get_user_model()
+        user = (
+            User.objects.filter(is_active=True, is_staff=True)
+            .filter(email__iexact=email)
+            .order_by("id")
+            .first()
+        )
+
+        # Always show generic success message to avoid user enumeration.
+        success_msg = _(
+            "Si el correo existe en el sistema, te enviaremos una contraseña temporal."
+        )
+
+        if user:
+            temp_pwd = ("RIFA-" + secrets.token_urlsafe(9)).replace("-", "").replace("_", "")[:12]
+            user.set_password(temp_pwd)
+            user.save(update_fields=["password"])
+
+            sec, _created = UserSecurity.objects.get_or_create(user=user)
+            sec.force_password_change = True
+            sec.password_hash_at_force = user.password  # hash of temporary password
+            sec.forced_at = None  # will be set by model save
+            sec.save()
+
+            subject = "Recuperación de contraseña (Admin) - Sistema de Rifas"
+            body = (
+                "Se solicitó recuperación de contraseña para el panel administrador.\n\n"
+                f"Usuario: {getattr(user, 'username', '')}\n"
+                f"Contraseña temporal: {temp_pwd}\n\n"
+                "Instrucciones:\n"
+                "- Entra a /admin/ con esta contraseña temporal.\n"
+                "- El sistema te obligará a cambiarla inmediatamente.\n"
+                "- Si tú no solicitaste esto, contacta al administrador.\n"
+            )
+            try:
+                send_mail(subject, body, None, [user.email], fail_silently=False)
+            except Exception:
+                # Keep response generic; logs will show SMTP errors in Railway.
+                pass
+
+        messages.success(request, success_msg)
+        return redirect("/admin/login/")
+
+    return render(request, "admin/password_reset.html", {"form": form})

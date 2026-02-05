@@ -297,3 +297,7 @@ class TicketLookupForm(forms.Form):
         cleaned["phone"] = f"{prefix}{number}"
         return cleaned
 
+
+class AdminPasswordRecoverForm(forms.Form):
+    email = forms.EmailField(label="Email", widget=forms.EmailInput(attrs={"autocomplete": "email"}))
+
