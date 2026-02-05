@@ -46,7 +46,20 @@
 
     <footer class="border-t border-white/10">
       <div class="mx-auto max-w-6xl px-4 py-8 text-sm text-slate-400">
-        © {% now "Y" %} GanaHoyRD. Todos los derechos reservados.
+        <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>© {% now "Y" %} GanaHoyRD. Todos los derechos reservados.</div>
+          <div class="text-slate-400">
+            CEO: <span class="text-slate-200 font-semibold">{{ site.ceo_name }}</span>
+            <span class="mx-2 text-white/20">|</span>
+            Contacto:
+            {% load formatting %}
+            <a class="text-emerald-200 hover:text-emerald-100"
+               href="https://wa.me/1{{ site.ceo_phone|digits_only }}"
+               target="_blank" rel="noopener">
+              {{ site.ceo_phone }}
+            </a>
+          </div>
+        </div>
       </div>
     </footer>
   </body>

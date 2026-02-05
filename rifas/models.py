@@ -521,6 +521,17 @@ class SiteContent(models.Model):
         )
     )
 
+    ceo_name = models.CharField(
+        max_length=160,
+        default="FEDERICO ANTONIO GRULLON DE LEON",
+        help_text="Nombre del CEO (se muestra en el pie de página).",
+    )
+    ceo_phone = models.CharField(
+        max_length=30,
+        default="8296058290",
+        help_text="Teléfono de contacto del CEO (se muestra en el pie de página).",
+    )
+
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -580,7 +591,7 @@ class Ticket(models.Model):
         ordering = ["number"]
 
     def __str__(self) -> str:
-        return f"{self.raffle.title} - #{self.number}"
+        return f"{self.raffle.title} - #{self.display_number}"
 
     @property
     def display_number(self) -> str:

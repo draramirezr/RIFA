@@ -306,6 +306,8 @@ class TicketAdmin(admin.ModelAdmin):
     list_filter = ("raffle",)
     search_fields = ("purchase__full_name", "purchase__phone", "purchase__email", "raffle__title")
     list_select_related = ("raffle", "purchase")
+    readonly_fields = ("number_display", "created_at")
+    fields = ("raffle", "purchase", "number", "number_display", "created_at")
 
     @admin.display(description="Boleto")
     def number_display(self, obj: Ticket):
