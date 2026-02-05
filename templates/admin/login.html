@@ -3,6 +3,45 @@
 
 {% block extrastyle %}{{ block.super }}
   <link rel="stylesheet" href="{% static 'admin/css/login.css' %}">
+  <style>
+    /* Make admin login truly centered + responsive */
+    body.login #nav-sidebar,
+    body.login #toggle-nav-sidebar {
+      display: none !important;
+    }
+    body.login #content {
+      margin-left: 0 !important;
+    }
+    body.login #content-main {
+      float: none !important;
+      width: auto !important;
+      max-width: 440px;
+      margin: 2rem auto;
+    }
+    body.login .form-row label {
+      float: none !important;
+      width: auto !important;
+      display: block;
+      margin: 0 0 .35rem;
+    }
+    body.login .form-row input[type="text"],
+    body.login .form-row input[type="password"] {
+      width: 100% !important;
+      box-sizing: border-box;
+    }
+    body.login .submit-row {
+      display: flex;
+      gap: .75rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    body.login .password-reset-link {
+      margin-top: .5rem;
+    }
+    #togglePassword.button {
+      padding: .45rem .7rem;
+    }
+  </style>
 {% endblock %}
 
 {% block bodyclass %}{{ block.super }} login{% endblock %}
