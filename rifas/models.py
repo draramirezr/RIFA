@@ -531,6 +531,16 @@ class SiteContent(models.Model):
         default="8296058290",
         help_text="Teléfono de contacto del CEO (se muestra en el pie de página).",
     )
+    ceo_instagram_url = models.URLField(
+        blank=True,
+        default="",
+        help_text="URL del Instagram del CEO (ej: https://instagram.com/usuario).",
+    )
+    ceo_tiktok_url = models.URLField(
+        blank=True,
+        default="",
+        help_text="URL del TikTok del CEO (ej: https://tiktok.com/@usuario).",
+    )
 
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -8,13 +8,15 @@ import secrets
 
 from django.contrib import messages
 from django.contrib.auth import get_user_model
+from django.contrib.admin.sites import site as admin_site
+from django.contrib.admin.views.decorators import staff_member_required
 from django.core.cache import cache
 from django.core.mail import send_mail
 from django.utils.translation import gettext as _
 
-from .forms import AdminPasswordRecoverForm, TicketLookupForm, TicketPurchaseForm
+from .forms import AdminPasswordRecoverForm, AdminWinnerLookupForm, TicketLookupForm, TicketPurchaseForm
 from .emails import send_purchase_notification
-from .models import BankAccount, Raffle, SiteContent, TicketPurchase, UserSecurity
+from .models import BankAccount, Raffle, SiteContent, Ticket, TicketPurchase, UserSecurity
 
 
 def home(request):
@@ -195,3 +197,55 @@ def admin_password_reset(request):
         return redirect("/admin/login/")
 
     return render(request, "admin/password_reset.html", {"form": form})
+
+
+def _mask_phone_last4(phone: str) -> str:
+    digits = "".join(ch for ch in (phone or "") if ch.isdigit())
+    if not digits:
+        return ""
+    if len(digits) <= 4:
+        return "*" * len(digits)
+    return digits[:-4] + "****"
+
+
+@staff_member_required
+@require_http_methods(["GET", "POST"])
+def admin_winner_search(request):
+    """
+    Admin-only tool to look up the winning ticket.
+    - Search by ticket number (supports left-zero padded input)
+    - Optional raffle filter to disambiguate repeated numbers across raffles
+    - Phone is masked by default with a "Ver" toggle.
+    """
+    form = AdminWinnerLookupForm(request.POST or None)
+    searched = request.method == "POST"
+    results = []
+
+    if searched and form.is_valid():
+        raffle = form.cleaned_data.get("raffle")
+        number = form.cleaned_data.get("ticket_number")
+        qs = Ticket.objects.select_related("raffle", "purchase").filter(number=number)
+        if raffle:
+            qs = qs.filter(raffle=raffle)
+        for t in qs.order_by("-created_at")[:50]:
+            p = t.purchase
+            phone = getattr(p, "phone", "") or ""
+            results.append(
+                {
+                    "ticket": t,
+                    "purchase": p,
+                    "masked_phone": _mask_phone_last4(phone),
+                    "full_phone": phone,
+                }
+            )
+
+    ctx = admin_site.each_context(request)
+    ctx.update(
+        {
+            "title": "Buscar boleto ganador",
+            "form": form,
+            "searched": searched,
+            "results": results,
+        }
+    )
+    return render(request, "admin/winner_search.html", ctx)

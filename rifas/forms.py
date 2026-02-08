@@ -312,3 +312,44 @@ class TicketLookupForm(forms.Form):
 class AdminPasswordRecoverForm(forms.Form):
     email = forms.EmailField(label="Email", widget=forms.EmailInput(attrs={"autocomplete": "email"}))
 
+
+class AdminWinnerLookupForm(forms.Form):
+    raffle = forms.ModelChoiceField(
+        queryset=Raffle.objects.all().order_by("-created_at"),
+        required=False,
+        empty_label="(Todas las rifas)",
+        label="Rifa (opcional)",
+    )
+    ticket_number = forms.CharField(
+        max_length=30,
+        label="Número de boleto",
+        help_text="Ej: 12 o 0012 (se acepta con ceros a la izquierda).",
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        base_input = (
+            "w-full rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3 "
+            "text-slate-100 placeholder:text-slate-500 outline-none "
+            "focus:border-emerald-400/60 focus:ring-2 focus:ring-emerald-400/15"
+        )
+        base_select = (
+            "w-full rounded-xl border border-white/10 bg-slate-950/40 px-3 py-3 "
+            "text-slate-100 outline-none focus:border-emerald-400/60 focus:ring-2 focus:ring-emerald-400/15"
+        )
+        self.fields["raffle"].widget.attrs.setdefault("class", base_select)
+        self.fields["ticket_number"].widget.attrs.setdefault("class", base_input)
+        self.fields["ticket_number"].widget.attrs.setdefault("inputmode", "numeric")
+        self.fields["ticket_number"].widget.attrs.setdefault("pattern", "[0-9]*")
+        self.fields["ticket_number"].widget.attrs.setdefault("placeholder", "0001")
+
+    def clean_ticket_number(self) -> int:
+        raw = (self.cleaned_data.get("ticket_number") or "").strip()
+        digits = "".join(ch for ch in raw if ch.isdigit())
+        if not digits:
+            raise ValidationError("Ingresa el número de boleto.")
+        n = int(digits)
+        if n <= 0:
+            raise ValidationError("El número de boleto debe ser mayor que 0.")
+        return n
+

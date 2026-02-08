@@ -1,0 +1,128 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content %}
+  <div id="content-main">
+    <h1>{% translate "Buscar boleto ganador" %}</h1>
+
+    <div class="module">
+      <form method="post" novalidate>
+        {% csrf_token %}
+
+        <fieldset class="module aligned">
+          <div class="form-row">
+            <div>
+              <label for="{{ form.raffle.id_for_label }}">{{ form.raffle.label }}</label>
+              <div class="fieldBox">{{ form.raffle }}</div>
+              {% if form.raffle.errors %}{{ form.raffle.errors }}{% endif %}
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div>
+              <label for="{{ form.ticket_number.id_for_label }}">{{ form.ticket_number.label }}</label>
+              <div class="fieldBox">{{ form.ticket_number }}</div>
+              {% if form.ticket_number.help_text %}
+                <div class="help">{{ form.ticket_number.help_text }}</div>
+              {% endif %}
+              {% if form.ticket_number.errors %}{{ form.ticket_number.errors }}{% endif %}
+            </div>
+          </div>
+        </fieldset>
+
+        <div class="submit-row">
+          <input type="submit" value="{% translate 'Buscar' %}" class="default">
+        </div>
+      </form>
+    </div>
+
+    {% if searched %}
+      <div class="module">
+        <h2>{% translate "Resultados" %}</h2>
+
+        {% if results %}
+          <table style="width:100%;">
+            <thead>
+              <tr>
+                <th>{% translate "Rifa" %}</th>
+                <th>{% translate "Boleto" %}</th>
+                <th>{% translate "Cliente" %}</th>
+                <th>{% translate "Email" %}</th>
+                <th>{% translate "Teléfono" %}</th>
+                <th>{% translate "Compra" %}</th>
+                <th>{% translate "Estado" %}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in results %}
+                <tr>
+                  <td>{{ r.ticket.raffle.title }}</td>
+                  <td>
+                    <a href="{% url 'admin:rifas_ticket_change' r.ticket.id %}">
+                      #{{ r.ticket.display_number }}
+                    </a>
+                  </td>
+                  <td>{{ r.purchase.full_name }}</td>
+                  <td>{{ r.purchase.email }}</td>
+                  <td>
+                    <span class="masked-phone" data-full="{{ r.full_phone|escape }}">{{ r.masked_phone }}</span>
+                    <button type="button" class="button reveal-phone" style="margin-left:6px;">
+                      {% translate "Ver" %}
+                    </button>
+                  </td>
+                  <td>
+                    <a href="{% url 'admin:rifas_ticketpurchase_change' r.purchase.id %}">
+                      {{ r.purchase.public_reference|default:r.purchase.id }}
+                    </a>
+                  </td>
+                  <td>{{ r.purchase.get_status_display }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p style="margin: 10px 0 0;">
+            {% translate "No se encontró ningún boleto con ese número." %}
+          </p>
+          <p style="margin: 6px 0 0; color: #6b7280;">
+            {% translate "Tip: si hay varias rifas con el mismo número, selecciona una rifa y vuelve a buscar." %}
+          </p>
+        {% endif %}
+      </div>
+    {% endif %}
+  </div>
+
+  <script>
+    (function () {
+      function onReady(fn) {
+        if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", fn);
+        else fn();
+      }
+      onReady(function () {
+        document.querySelectorAll(".reveal-phone").forEach(function (btn) {
+          btn.addEventListener("click", function () {
+            const wrap = btn.closest("td");
+            if (!wrap) return;
+            const span = wrap.querySelector(".masked-phone");
+            if (!span) return;
+            const full = span.getAttribute("data-full") || "";
+            const masked = span.getAttribute("data-masked") || span.textContent || "";
+
+            const showing = span.getAttribute("data-showing") === "1";
+            if (showing) {
+              span.textContent = masked;
+              span.setAttribute("data-showing", "0");
+              btn.textContent = "{% translate 'Ver' %}";
+            } else {
+              span.setAttribute("data-masked", masked);
+              span.textContent = full;
+              span.setAttribute("data-showing", "1");
+              btn.textContent = "{% translate 'Ocultar' %}";
+            }
+          });
+        });
+      });
+    })();
+  </script>
+{% endblock %}
+

@@ -95,9 +95,9 @@
             }
 
             const key = "admin_recent_actions_collapsed";
-            const initialCollapsed =
-              (localStorage.getItem(key) === "1") ||
-              (localStorage.getItem(key) === null && window.matchMedia && window.matchMedia("(max-width: 520px)").matches);
+            const stored = localStorage.getItem(key);
+            // Default: collapsed for everyone (admin can expand and we remember it).
+            const initialCollapsed = stored === null ? true : stored === "1";
 
             function setCollapsed(collapsed) {
               module.classList.toggle("is-collapsed", collapsed);
@@ -152,9 +152,16 @@
 {% endblock %}
 
 {% block branding %}
-  <h1 id="site-name">
-    <a href="{% url 'admin:index' %}">{{ site_header|default:_("Administración") }}</a>
-  </h1>
+  <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+    <h1 id="site-name" style="margin:0;">
+      <a href="{% url 'admin:index' %}">{{ site_header|default:_("Administración") }}</a>
+    </h1>
+    {% if request.user.is_staff %}
+      <a href="{% url 'admin_winner_search' %}" class="button" style="margin-top:2px;">
+        {% translate "Buscar boleto ganador" %}
+      </a>
+    {% endif %}
+  </div>
 {% endblock %}
 
 {% block nav-global %}{% endblock %}

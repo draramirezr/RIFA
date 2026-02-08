@@ -25,6 +25,7 @@ from rifas import views as rifas_views
 urlpatterns = [
     # Admin password recovery (must be BEFORE admin.site.urls)
     path("admin/password-reset/", rifas_views.admin_password_reset, name="admin_password_reset"),
+    path("admin/boleto-ganador/", rifas_views.admin_winner_search, name="admin_winner_search"),
     path('admin/', admin.site.urls),
     path('', include('rifas.urls')),
 ]

@@ -17,7 +17,6 @@
         <nav class="hidden items-center gap-4 text-sm sm:flex">
           <a href="{% url 'rifas:my_tickets' %}" class="text-slate-300 hover:text-white">Mis boletos</a>
           <a href="{% url 'rifas:raffle_history' %}" class="text-slate-300 hover:text-white">Historial</a>
-          <a href="/admin/" class="text-slate-300 hover:text-white">Admin</a>
         </nav>
 
         <!-- Mobile nav -->
@@ -31,9 +30,6 @@
             </a>
             <a href="{% url 'rifas:raffle_history' %}" class="block rounded-xl px-3 py-2 text-sm text-slate-200 hover:bg-white/10">
               Historial
-            </a>
-            <a href="/admin/" class="block rounded-xl px-3 py-2 text-sm text-slate-200 hover:bg-white/10">
-              Admin
             </a>
           </div>
         </details>
@@ -58,6 +54,20 @@
                target="_blank" rel="noopener">
               {{ site.ceo_phone }}
             </a>
+            {% if site.ceo_instagram_url %}
+              <span class="mx-2 text-white/20">|</span>
+              <a class="text-slate-300 hover:text-white underline underline-offset-4"
+                 href="{{ site.ceo_instagram_url }}" target="_blank" rel="noopener">
+                Instagram
+              </a>
+            {% endif %}
+            {% if site.ceo_tiktok_url %}
+              <span class="mx-2 text-white/20">|</span>
+              <a class="text-slate-300 hover:text-white underline underline-offset-4"
+                 href="{{ site.ceo_tiktok_url }}" target="_blank" rel="noopener">
+                TikTok
+              </a>
+            {% endif %}
           </div>
         </div>
       </div>
