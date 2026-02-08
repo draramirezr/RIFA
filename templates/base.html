@@ -11,18 +11,60 @@
     <link rel="icon" type="image/png" sizes="16x16" href="{% static 'dist/icons/favicon-16x16.png' %}">
     <link rel="apple-touch-icon" sizes="180x180" href="{% static 'dist/icons/apple-touch-icon.png' %}">
     <link rel="manifest" href="{% static 'dist/icons/site.webmanifest' %}">
+    {% block meta_robots %}
+      <meta name="robots" content="index,follow">
+    {% endblock %}
+    <meta name="description" content="{% block meta_description %}GanaHoyRD: participa en rifas en República Dominicana de forma segura y transparente. Compra tus boletos y sube tu comprobante para validar tu participación.{% endblock %}">
+    <link rel="canonical" href="{{ request.build_absolute_uri }}">
+
+    {# Open Graph / Twitter (sharing) #}
+    <meta property="og:site_name" content="GanaHoyRD">
+    <meta property="og:type" content="{% block og_type %}website{% endblock %}">
+    <meta property="og:title" content="{% block og_title %}{% block title %}GanaHoyRD{% endblock %}{% endblock %}">
+    <meta property="og:description" content="{% block og_description %}{% block meta_description %}GanaHoyRD: participa en rifas en República Dominicana de forma segura y transparente.{% endblock %}{% endblock %}">
+    <meta property="og:url" content="{{ request.build_absolute_uri }}">
+    {% if site.site_logo %}
+      <meta property="og:image" content="{{ request.scheme }}://{{ request.get_host }}{{ site.site_logo.url }}">
+    {% else %}
+      <meta property="og:image" content="{{ request.scheme }}://{{ request.get_host }}{% static 'dist/icons/android-chrome-512x512.png' %}">
+    {% endif %}
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{% block twitter_title %}{% block title %}GanaHoyRD{% endblock %}{% endblock %}">
+    <meta name="twitter:description" content="{% block twitter_description %}{% block meta_description %}GanaHoyRD: participa en rifas en República Dominicana.{% endblock %}{% endblock %}">
+
+    {# Structured data (Organization) #}
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": "GanaHoyRD",
+        "url": "{{ request.scheme }}://{{ request.get_host }}/",
+        {% if site.site_logo %}
+        "logo": "{{ request.scheme }}://{{ request.get_host }}{{ site.site_logo.url }}",
+        {% else %}
+        "logo": "{{ request.scheme }}://{{ request.get_host }}{% static 'dist/icons/android-chrome-512x512.png' %}",
+        {% endif %}
+        "sameAs": [
+          {% if site.ceo_instagram_url %}"{{ site.ceo_instagram_url }}"{% endif %}{% if site.ceo_instagram_url and site.ceo_tiktok_url %},{% endif %}
+          {% if site.ceo_tiktok_url %}"{{ site.ceo_tiktok_url }}"{% endif %}
+        ]
+      }
+    </script>
     <link rel="stylesheet" href="{% static 'dist/tailwind.css' %}">
   </head>
   <body class="min-h-screen bg-slate-950 text-slate-100">
     <header class="border-b border-white/10 bg-slate-950/60 backdrop-blur">
       <div class="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
-        <a href="{% url 'rifas:home' %}" class="flex items-center gap-3">
-          {% if site.site_logo %}
-            <img src="{{ site.site_logo.url }}" alt="GanaHoyRD"
-                 style="height:28px; width:28px;"
-                 class="rounded-lg border border-white/10 bg-white/5 object-contain p-1" />
-          {% endif %}
-          <span class="text-lg font-semibold tracking-tight">GanaHoyRD</span>
+        <a href="{% url 'rifas:home' %}" class="flex items-center">
+          <img
+            src="{% static 'dist/brand/boton.png' %}"
+            alt="GanaHoyRD"
+            style="height:28px; width:auto;"
+            class="object-contain"
+            loading="eager"
+            decoding="async"
+          />
+          <span class="sr-only">GanaHoyRD</span>
         </a>
         <!-- Desktop nav -->
         <nav class="hidden items-center gap-4 text-sm sm:flex">

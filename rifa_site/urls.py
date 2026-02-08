@@ -17,16 +17,21 @@ Including another URLconf
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
+from django.contrib.sitemaps.views import sitemap
 from django.urls import include, path
+from django.views.generic import TemplateView
 
 from rifas.media_views import media_serve
 from rifas import views as rifas_views
+from rifas.sitemaps import sitemaps as rifas_sitemaps
 
 urlpatterns = [
     # Admin password recovery (must be BEFORE admin.site.urls)
     path("admin/password-reset/", rifas_views.admin_password_reset, name="admin_password_reset"),
     path("admin/boleto-ganador/", rifas_views.admin_winner_search, name="admin_winner_search"),
     path('admin/', admin.site.urls),
+    path("robots.txt", TemplateView.as_view(template_name="robots.txt", content_type="text/plain")),
+    path("sitemap.xml", sitemap, {"sitemaps": rifas_sitemaps}),
     path('', include('rifas.urls')),
 ]
 

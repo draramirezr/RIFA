@@ -2,6 +2,8 @@
 {% load humanize %}
 {% block title %}Comprar - {{ raffle.title }}{% endblock %}
 
+{% block meta_robots %}<meta name="robots" content="noindex,nofollow">{% endblock %}
+
 {% block content %}
   <div class="mb-6">
     <a href="{% url 'rifas:raffle_detail' raffle.slug %}" class="text-sm text-slate-300 hover:text-white">← Volver</a>

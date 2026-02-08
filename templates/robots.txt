@@ -1,0 +1,9 @@
+User-agent: *
+Disallow: /admin/
+Disallow: /mis-boletos/
+Disallow: /gracias/
+Disallow: /rifa/*/comprar/
+Disallow: /media/payments/
+
+Sitemap: {{ request.scheme }}://{{ request.get_host }}/sitemap.xml
+

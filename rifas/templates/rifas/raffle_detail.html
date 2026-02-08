@@ -2,6 +2,9 @@
 {% load humanize %}
 {% block title %}{{ raffle.title }}{% endblock %}
 
+{% block og_type %}product{% endblock %}
+{% block meta_description %}Participa en la rifa “{{ raffle.title }}”. Precio por boleto RD$ {{ raffle.price_per_ticket|intcomma }}. Sorteo: {{ raffle.draw_date|date:"d M Y, h:i a" }}.{% endblock %}
+
 {% block content %}
   <div class="grid grid-cols-1 gap-8 lg:grid-cols-3">
     <div class="lg:col-span-2">
