@@ -68,6 +68,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django.contrib.humanize',
+    'imagekit',
     'rifas.apps.RifasConfig',
 ]
 
@@ -248,6 +249,10 @@ STORAGES = {
 # Media (user uploads: payment proofs, raffle images)
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
+
+# ImageKit: store generated cache files under /media/raffles/ so they are
+# publicly servable by our production media_serve allowlist (prefix "raffles/").
+IMAGEKIT_CACHEFILE_DIR = "raffles/cache"
 
 # Upload limits (videos/admin uploads can be large; handlers will stream to disk).
 # These guardrails prevent accidental huge posts, and can be tuned via env.

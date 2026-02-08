@@ -250,6 +250,7 @@ class SiteContentAdmin(admin.ModelAdmin):
         ("Métodos de pago (interno)", {"fields": ("payment_title", "payment_body")}),
         ("Detalles de pago", {"fields": ("payment_holder_name", "payment_account_type", "payment_currency")}),
         ("Términos y condiciones", {"fields": ("terms_title", "terms_body")}),
+        ("Identidad", {"fields": ("site_logo",)}),
         ("CEO / Contacto", {"fields": ("ceo_name", "ceo_phone", "ceo_instagram_url", "ceo_tiktok_url")}),
     )
 

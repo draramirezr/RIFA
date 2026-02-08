@@ -6,6 +6,9 @@ import secrets
 from django.core.exceptions import ValidationError
 from django.conf import settings
 
+from imagekit.models import ImageSpecField
+from imagekit.processors import ResizeToFill
+
 
 def validate_video_file(file):
     """
@@ -78,6 +81,13 @@ class Raffle(models.Model):
         help_text="Mínimo de boletos pagados por compra (ej: 1, 5, 10).",
     )
     image = models.ImageField(upload_to="raffles/", blank=True, null=True, help_text="Opcional. Imagen principal.")
+    # Normalized image for the public carousel (3:4), generated on demand and cached.
+    image_carousel = ImageSpecField(
+        source="image",
+        processors=[ResizeToFill(900, 1200)],
+        format="JPEG",
+        options={"quality": 85},
+    )
     video = models.FileField(
         upload_to="raffles/videos/",
         blank=True,
@@ -564,6 +574,12 @@ class SiteContent(models.Model):
         default="",
         help_text="URL del TikTok del CEO (ej: https://tiktok.com/@usuario).",
     )
+    site_logo = models.ImageField(
+        upload_to="site/",
+        blank=True,
+        null=True,
+        help_text="Logo del sitio (recomendado PNG transparente).",
+    )
 
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -647,6 +663,13 @@ class Ticket(models.Model):
 class RaffleImage(models.Model):
     raffle = models.ForeignKey(Raffle, on_delete=models.CASCADE, related_name="images")
     image = models.ImageField(upload_to="raffles/")
+    # Normalized image for the public carousel (3:4), generated on demand and cached.
+    image_carousel = ImageSpecField(
+        source="image",
+        processors=[ResizeToFill(900, 1200)],
+        format="JPEG",
+        options={"quality": 85},
+    )
     sort_order = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
 

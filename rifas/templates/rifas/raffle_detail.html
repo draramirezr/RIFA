@@ -18,14 +18,14 @@
                  style="scrollbar-width: none;">
               {% if raffle.image %}
                 <div class="snap-start shrink-0 w-full">
-                  <img src="{{ raffle.image.url }}" alt="{{ raffle.title }}"
+                  <img src="{{ raffle.image_carousel.url }}" alt="{{ raffle.title }}"
                        loading="lazy" decoding="async"
                        class="aspect-[3/4] w-full rounded-2xl border border-white/10 object-cover" />
                 </div>
               {% endif %}
               {% for img in raffle.images.all|slice:":3" %}
                 <div class="snap-start shrink-0 w-full">
-                  <img src="{{ img.image.url }}" alt="{{ raffle.title }}"
+                  <img src="{{ img.image_carousel.url }}" alt="{{ raffle.title }}"
                        loading="lazy" decoding="async"
                        class="aspect-[3/4] w-full rounded-2xl border border-white/10 object-cover" />
                 </div>

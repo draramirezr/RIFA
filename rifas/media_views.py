@@ -7,7 +7,7 @@ from django.http import Http404
 from django.views.static import serve
 
 
-ALLOWED_PUBLIC_MEDIA_PREFIXES = ("raffles/", "banks/")
+ALLOWED_PUBLIC_MEDIA_PREFIXES = ("raffles/", "banks/", "site/")
 ALLOWED_PRIVATE_MEDIA_PREFIXES = ("payments/",)
 
 
