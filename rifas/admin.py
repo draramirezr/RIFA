@@ -307,6 +307,11 @@ class CustomerAdmin(admin.ModelAdmin):
     list_filter = ("created_at",)
     actions = [export_customers_xlsx]
 
+    def has_add_permission(self, request):
+        # Customers are created/updated automatically from purchases.
+        # Hide "Añadir cliente" to avoid confusion.
+        return False
+
 
 @admin.register(Ticket)
 class TicketAdmin(admin.ModelAdmin):

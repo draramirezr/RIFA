@@ -106,6 +106,11 @@ class Raffle(models.Model):
         blank=True,
         help_text="Opcional. Nombre del ganador(a) para mostrar en el historial.",
     )
+    winner_ticket_number = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Opcional. Número de boleto ganador (para mostrar en el historial).",
+    )
     winner_media = models.FileField(
         upload_to="raffles/history/winner/",
         blank=True,
@@ -168,6 +173,24 @@ class Raffle(models.Model):
     def delivery_is_video(self) -> bool:
         f = getattr(self, "delivery_media", None)
         return bool(f and getattr(f, "name", None) and self._is_video_name(f.name))
+
+    @property
+    def winner_ticket_display(self) -> str:
+        """
+        Winner ticket number formatted with left zero padding based on max_tickets
+        (same logic as Ticket.display_number).
+        """
+        n = getattr(self, "winner_ticket_number", None)
+        if not n:
+            return ""
+        try:
+            max_tickets = int(getattr(self, "max_tickets", 0) or 0)
+        except Exception:
+            max_tickets = 0
+        width = max(3, len(str(max_tickets))) if max_tickets else 0
+        if width:
+            return f"{int(n):0{width}d}"
+        return str(int(n))
 
     @property
     def is_finished(self) -> bool:

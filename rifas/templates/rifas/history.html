@@ -44,11 +44,19 @@
             </div>
           </div>
 
-          {% if raffle.winner_name or raffle.winner_media or raffle.winner_notes %}
+          {% if raffle.winner_name or raffle.winner_ticket_number or raffle.winner_media or raffle.winner_notes %}
             <div class="mt-5">
               <div class="text-sm font-semibold text-slate-100">Ganador(a)</div>
-              {% if raffle.winner_name %}
-                <div class="mt-1 text-sm text-slate-300">{{ raffle.winner_name }}</div>
+              {% if raffle.winner_name or raffle.winner_ticket_number %}
+                <div class="mt-1 text-sm text-slate-300">
+                  {% if raffle.winner_name %}
+                    Nombre: <span class="text-slate-100 font-semibold">{{ raffle.winner_name }}</span>
+                  {% endif %}
+                  {% if raffle.winner_ticket_display %}
+                    <span class="mx-2 text-white/20">|</span>
+                    Boleto ganado: <span class="text-slate-100 font-semibold">#{{ raffle.winner_ticket_display }}</span>
+                  {% endif %}
+                </div>
               {% endif %}
               {% if raffle.winner_media %}
                 <div class="mt-3">
