@@ -7,7 +7,7 @@ from django.core.exceptions import ValidationError
 from django.conf import settings
 
 from imagekit.models import ImageSpecField
-from imagekit.processors import ResizeToFill
+from imagekit.processors import ResizeToFill, ResizeToFit
 
 from .imagekit_processors import AutoTrim
 
@@ -628,6 +628,12 @@ class BankAccount(models.Model):
         blank=True,
         null=True,
         help_text="Logo del banco. Recomendado: PNG cuadrado 512×512.",
+    )
+    # Normalized logo for payment method icons (square), generated on demand and cached.
+    logo_icon = ImageSpecField(
+        source="logo",
+        processors=[AutoTrim(tolerance=12), ResizeToFit(256, 256)],
+        format="PNG",
     )
     created_at = models.DateTimeField(auto_now_add=True)
 

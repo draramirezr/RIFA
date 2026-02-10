@@ -180,7 +180,7 @@
                       data-account="{{ b.account_number }}"
                       {% if forloop.first %}data-default="1"{% endif %}>
                 {% if b.logo %}
-                  <img src="{{ b.logo.url }}" alt="{{ b.bank_name }}" class="h-full w-full p-2 object-contain" />
+                  <img src="{{ b.logo_icon.url }}" alt="{{ b.bank_name }}" class="h-full w-full p-2 object-contain" />
                 {% else %}
                   <div class="h-full w-full rounded-lg border border-white/10 bg-white/5 grid place-items-center p-2 text-[10px] font-semibold text-slate-200">
                     {{ b.bank_name|slice:":2"|upper }}
