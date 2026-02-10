@@ -9,6 +9,8 @@ from django.conf import settings
 from imagekit.models import ImageSpecField
 from imagekit.processors import ResizeToFill
 
+from .imagekit_processors import AutoTrim
+
 
 def validate_video_file(file):
     """
@@ -80,11 +82,19 @@ class Raffle(models.Model):
         validators=[MinValueValidator(1)],
         help_text="Mínimo de boletos pagados por compra (ej: 1, 5, 10).",
     )
-    image = models.ImageField(upload_to="raffles/", blank=True, null=True, help_text="Opcional. Imagen principal.")
+    image = models.ImageField(
+        upload_to="raffles/",
+        blank=True,
+        null=True,
+        help_text=(
+            "Opcional. Imagen principal.\n"
+            "Recomendado: vertical 3:4 (ej: 1200×1600). Mínimo sugerido: 900×1200."
+        ),
+    )
     # Normalized image for the public carousel (3:4), generated on demand and cached.
     image_carousel = ImageSpecField(
         source="image",
-        processors=[ResizeToFill(900, 1200)],
+        processors=[AutoTrim(tolerance=12), ResizeToFill(900, 1200)],
         format="JPEG",
         options={"quality": 85},
     )
@@ -109,7 +119,10 @@ class Raffle(models.Model):
         upload_to="raffles/history/",
         blank=True,
         null=True,
-        help_text="Opcional. Portada para el historial (una sola foto).",
+        help_text=(
+            "Opcional. Portada para el historial (una sola foto).\n"
+            "Recomendado: horizontal 16:9 (ej: 1200×675 o 1920×1080)."
+        ),
     )
     winner_name = models.CharField(
         max_length=120,
@@ -126,7 +139,10 @@ class Raffle(models.Model):
         blank=True,
         null=True,
         validators=[validate_history_media_file],
-        help_text="Opcional. Foto o video del ganador(a).",
+        help_text=(
+            "Opcional. Foto o video del ganador(a).\n"
+            "Foto recomendado: 3:4 (ej: 1200×1600). Video recomendado: MP4 (H.264)."
+        ),
     )
     winner_notes = models.TextField(
         blank=True,
@@ -137,7 +153,10 @@ class Raffle(models.Model):
         blank=True,
         null=True,
         validators=[validate_history_media_file],
-        help_text="Opcional. Foto o video de la entrega del premio.",
+        help_text=(
+            "Opcional. Foto o video de la entrega del premio.\n"
+            "Foto recomendado: 3:4 (ej: 1200×1600). Video recomendado: MP4 (H.264)."
+        ),
     )
     delivery_notes = models.TextField(
         blank=True,
@@ -578,7 +597,7 @@ class SiteContent(models.Model):
         upload_to="site/",
         blank=True,
         null=True,
-        help_text="Logo del sitio (recomendado PNG transparente).",
+        help_text="Logo del sitio. Recomendado: PNG cuadrado 512×512 (fondo transparente).",
     )
 
     updated_at = models.DateTimeField(auto_now=True)
@@ -604,7 +623,12 @@ class BankAccount(models.Model):
     sort_order = models.PositiveIntegerField(default=0)
     is_active = models.BooleanField(default=True)
     # Logo placeholder (optional). User can upload later.
-    logo = models.ImageField(upload_to="banks/", blank=True, null=True)
+    logo = models.ImageField(
+        upload_to="banks/",
+        blank=True,
+        null=True,
+        help_text="Logo del banco. Recomendado: PNG cuadrado 512×512.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -662,11 +686,14 @@ class Ticket(models.Model):
 
 class RaffleImage(models.Model):
     raffle = models.ForeignKey(Raffle, on_delete=models.CASCADE, related_name="images")
-    image = models.ImageField(upload_to="raffles/")
+    image = models.ImageField(
+        upload_to="raffles/",
+        help_text="Imagen adicional. Recomendado: vertical 3:4 (ej: 1200×1600). Mínimo sugerido: 900×1200.",
+    )
     # Normalized image for the public carousel (3:4), generated on demand and cached.
     image_carousel = ImageSpecField(
         source="image",
-        processors=[ResizeToFill(900, 1200)],
+        processors=[AutoTrim(tolerance=12), ResizeToFill(900, 1200)],
         format="JPEG",
         options={"quality": 85},
     )

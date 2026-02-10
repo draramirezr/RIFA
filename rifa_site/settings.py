@@ -253,7 +253,8 @@ MEDIA_ROOT = BASE_DIR / "media"
 
 # ImageKit: store generated cache files under /media/raffles/ so they are
 # publicly servable by our production media_serve allowlist (prefix "raffles/").
-IMAGEKIT_CACHEFILE_DIR = "raffles/cache"
+# Versioned cache dir so new processors regenerate images (avoids stale cache files).
+IMAGEKIT_CACHEFILE_DIR = "raffles/cache/v2"
 
 # Upload limits (videos/admin uploads can be large; handlers will stream to disk).
 # These guardrails prevent accidental huge posts, and can be tuned via env.
