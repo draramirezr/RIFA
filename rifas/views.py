@@ -16,7 +16,7 @@ from django.core.mail import send_mail
 from django.utils.translation import gettext as _
 
 from .forms import AdminPasswordRecoverForm, AdminWinnerLookupForm, TicketLookupForm, TicketPurchaseForm
-from .emails import send_purchase_notification
+from .emails import send_customer_purchase_received, send_purchase_notification
 from .models import BankAccount, Raffle, SiteContent, Ticket, TicketPurchase, UserSecurity
 
 
@@ -71,6 +71,7 @@ def buy_ticket(request, slug: str):
             purchase.user_agent = (request.META.get("HTTP_USER_AGENT") or "")[:400]
             purchase.save()
             send_purchase_notification(request=request, purchase=purchase)
+            send_customer_purchase_received(purchase=purchase)
             return redirect("rifas:thanks", purchase_id=purchase.id)
     else:
         form = TicketPurchaseForm(raffle=raffle)

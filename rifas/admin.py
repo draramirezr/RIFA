@@ -117,11 +117,15 @@ class RaffleAdmin(admin.ModelAdmin):
 
 @admin.action(description="Aprobar compras seleccionadas")
 def approve_purchases(modeladmin, request, queryset):
+    from .emails import send_customer_purchase_status
+
     for purchase in queryset.select_related("raffle"):
         try:
             purchase.approve()
+            send_customer_purchase_status(purchase=purchase)
         except ValueError as e:
             purchase.reject(notes=str(e))
+            send_customer_purchase_status(purchase=purchase)
             modeladmin.message_user(
                 request,
                 f"Compra #{purchase.id} rechazada: {e}",
@@ -131,8 +135,11 @@ def approve_purchases(modeladmin, request, queryset):
 
 @admin.action(description="Rechazar compras seleccionadas")
 def reject_purchases(modeladmin, request, queryset):
-    now = timezone.now()
-    queryset.update(status=TicketPurchase.Status.REJECTED, decided_at=now)
+    from .emails import send_customer_purchase_status
+
+    for purchase in queryset.select_related("raffle"):
+        purchase.reject()
+        send_customer_purchase_status(purchase=purchase)
 
 
 class PhonePrefixFilter(admin.SimpleListFilter):
@@ -227,6 +234,8 @@ class TicketPurchaseAdmin(admin.ModelAdmin):
         )
 
     def save_model(self, request, obj, form, change):
+        from .emails import send_customer_purchase_status
+
         prev_status = None
         if change and obj.pk:
             prev_status = TicketPurchase.objects.filter(pk=obj.pk).values_list("status", flat=True).first()
@@ -236,9 +245,13 @@ class TicketPurchaseAdmin(admin.ModelAdmin):
                 obj.apply_offer()
                 obj.save(update_fields=["bonus_quantity", "total_tickets"])
                 obj.generate_tickets_if_needed()
+                send_customer_purchase_status(purchase=obj)
             except ValueError as e:
                 obj.reject(notes=str(e))
                 self.message_user(request, f"No se pudo aprobar: {e}", level=messages.ERROR)
+                send_customer_purchase_status(purchase=obj)
+        elif obj.status == TicketPurchase.Status.REJECTED and prev_status != TicketPurchase.Status.REJECTED:
+            send_customer_purchase_status(purchase=obj)
 
 
 @admin.register(SiteContent)

@@ -78,6 +78,27 @@ $env:EMAIL_USE_TLS="1"
 $env:DEFAULT_FROM_EMAIL="GanaHoyRD <no-reply@tudominio.com>"
 ```
 
+### SendGrid (Railway) - recomendado
+
+En Railway configura estas variables:
+
+```text
+# Activa emails
+SEND_PURCHASE_EMAILS=1
+SEND_CUSTOMER_EMAILS=1
+
+# A dónde llega la notificación interna (admin)
+PURCHASE_NOTIFY_EMAIL=tu-correo@dominio.com
+
+# SendGrid SMTP
+SENDGRID_API_KEY=SG.xxxxxxxxxxxxxxxxxxxxxxxxx
+DEFAULT_FROM_EMAIL=GanaHoyRD <no-reply@ganahoyrd.com>
+```
+
+Notas:
+- `SENDGRID_API_KEY` se usa como password SMTP automáticamente.
+- El `DEFAULT_FROM_EMAIL` debe ser un remitente verificado en SendGrid (Single Sender o dominio).
+
 ## Tailwind (sin CDN, listo para producción)
 
 Como aquí no usamos Node/npm, se usa el **Tailwind Standalone CLI** (Windows) en `tools\tailwindcss.exe`.

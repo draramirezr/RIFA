@@ -273,22 +273,32 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = int(os.environ.get("FILE_UPLOAD_MAX_MEMORY_SIZE", 
 # NOTE: This should be paired with a persistent volume mounted to MEDIA_ROOT.
 SERVE_PUBLIC_MEDIA = os.environ.get("SERVE_PUBLIC_MEDIA", "0") == "1"
 
-# Email (purchase notifications)
+# Email (SendGrid SMTP recommended in production)
 # Dev default: prints emails in terminal (no SMTP required)
-EMAIL_BACKEND = os.environ.get(
-    "EMAIL_BACKEND",
-    "django.core.mail.backends.console.EmailBackend",
-)
-EMAIL_HOST = os.environ.get("EMAIL_HOST", "")
+_env_email_backend = (os.environ.get("EMAIL_BACKEND", "") or "").strip()
+SENDGRID_API_KEY = (os.environ.get("SENDGRID_API_KEY", "") or "").strip()
+
+if _env_email_backend:
+    EMAIL_BACKEND = _env_email_backend
+else:
+    EMAIL_BACKEND = (
+        "django.core.mail.backends.smtp.EmailBackend"
+        if SENDGRID_API_KEY
+        else "django.core.mail.backends.console.EmailBackend"
+    )
+
+# If SENDGRID_API_KEY is present and SMTP fields not provided, default to SendGrid SMTP.
+EMAIL_HOST = os.environ.get("EMAIL_HOST", "smtp.sendgrid.net" if SENDGRID_API_KEY else "")
 EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
-EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
-EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
+EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "apikey" if SENDGRID_API_KEY else "")
+EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", SENDGRID_API_KEY if SENDGRID_API_KEY else "")
 EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "1") == "1"
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "GanaHoyRD <no-reply@rifas.local>")
 
 # Where purchase proof notifications go (admin inbox)
 PURCHASE_NOTIFY_EMAIL = os.environ.get("PURCHASE_NOTIFY_EMAIL", "")
 SEND_PURCHASE_EMAILS = os.environ.get("SEND_PURCHASE_EMAILS", "0") == "1"
+SEND_CUSTOMER_EMAILS = os.environ.get("SEND_CUSTOMER_EMAILS", "0") == "1"
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
