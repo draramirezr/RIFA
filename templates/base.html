@@ -15,14 +15,14 @@
       <meta name="robots" content="index,follow">
     {% endblock %}
     <meta name="description" content="{% block meta_description %}GanaHoyRD: participa en rifas en República Dominicana de forma segura y transparente. Compra tus boletos y sube tu comprobante para validar tu participación.{% endblock %}">
-    <link rel="canonical" href="{{ request.build_absolute_uri }}">
+    <link rel="canonical" href="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">
 
     {# Open Graph / Twitter (sharing) #}
     <meta property="og:site_name" content="GanaHoyRD">
     <meta property="og:type" content="{% block og_type %}website{% endblock %}">
     <meta property="og:title" content="{% block og_title %}GanaHoyRD{% endblock %}">
     <meta property="og:description" content="{% block og_description %}GanaHoyRD: participa en rifas en República Dominicana de forma segura y transparente. Compra tus boletos y sube tu comprobante para validar tu participación.{% endblock %}">
-    <meta property="og:url" content="{{ request.build_absolute_uri }}">
+    <meta property="og:url" content="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">
     {% if site.site_logo %}
       <meta property="og:image" content="{{ request.scheme }}://{{ request.get_host }}{{ site.site_logo.url }}">
     {% else %}
