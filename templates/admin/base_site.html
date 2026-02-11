@@ -1,5 +1,5 @@
 {% extends "admin/base.html" %}
-{% load i18n %}
+{% load i18n static %}
 
 {# Minimal override of Django admin base_site to inject login-only responsive tweaks #}
 
@@ -7,6 +7,7 @@
 
 {% block extrastyle %}
   {{ block.super }}
+  <link rel="stylesheet" href="{% static 'dist/admin/admin.css' %}">
   <style>
     /* Apply ONLY on admin login */
     body.login #nav-sidebar,
@@ -159,6 +160,9 @@
     {% if request.user.is_staff %}
       <a href="{% url 'admin_winner_search' %}" class="button" style="margin-top:2px;">
         {% translate "Buscar boleto ganador" %}
+      </a>
+      <a href="{% url 'admin_raffle_calculator' %}" class="button" style="margin-top:2px;">
+        {% translate "Calculadora de boletos" %}
       </a>
     {% endif %}
   </div>

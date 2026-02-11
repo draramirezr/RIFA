@@ -12,8 +12,8 @@ from .models import BankAccount, Customer, Raffle, RaffleImage, RaffleOffer, Sit
 admin.site.site_header = "GanaHoyRD — Administración"
 admin.site.site_title = "GanaHoyRD — Admin"
 admin.site.index_title = "Panel de administración"
-# Keep admin usable on mobile: disable the left nav sidebar.
-admin.site.enable_nav_sidebar = False
+# Keep admin organized on desktop; CSS hides sidebar on mobile.
+admin.site.enable_nav_sidebar = True
 
 
 class RaffleOfferInline(admin.TabularInline):

@@ -1,0 +1,155 @@
+{% extends "admin/base_site.html" %}
+{% load i18n humanize %}
+
+{% block content %}
+  <div id="content-main">
+    <h1>{% translate "Calculadora de boletos" %}</h1>
+
+    <div class="module">
+      <form method="post" novalidate>
+        {% csrf_token %}
+
+        <fieldset class="module aligned">
+          <div class="form-row">
+            <div>
+              <label for="{{ form.raffle.id_for_label }}">{{ form.raffle.label }}</label>
+              <div class="fieldBox">{{ form.raffle }}</div>
+              {% if form.raffle.help_text %}<div class="help">{{ form.raffle.help_text }}</div>{% endif %}
+              {% if form.raffle.errors %}{{ form.raffle.errors }}{% endif %}
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div>
+              <label for="{{ form.product_cost.id_for_label }}">{{ form.product_cost.label }}</label>
+              <div class="fieldBox">{{ form.product_cost }}</div>
+              {% if form.product_cost.errors %}{{ form.product_cost.errors }}{% endif %}
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div>
+              <label for="{{ form.shipping_cost.id_for_label }}">{{ form.shipping_cost.label }}</label>
+              <div class="fieldBox">{{ form.shipping_cost }}</div>
+              {% if form.shipping_cost.errors %}{{ form.shipping_cost.errors }}{% endif %}
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div>
+              <label for="{{ form.advertising_cost.id_for_label }}">{{ form.advertising_cost.label }}</label>
+              <div class="fieldBox">{{ form.advertising_cost }}</div>
+              {% if form.advertising_cost.errors %}{{ form.advertising_cost.errors }}{% endif %}
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div>
+              <label for="{{ form.desired_margin_percent.id_for_label }}">{{ form.desired_margin_percent.label }}</label>
+              <div class="fieldBox">{{ form.desired_margin_percent }}</div>
+              {% if form.desired_margin_percent.help_text %}<div class="help">{{ form.desired_margin_percent.help_text }}</div>{% endif %}
+              {% if form.desired_margin_percent.errors %}{{ form.desired_margin_percent.errors }}{% endif %}
+            </div>
+          </div>
+        </fieldset>
+
+        <div class="submit-row">
+          <input type="submit" value="{% translate 'Calcular' %}" class="default">
+        </div>
+      </form>
+    </div>
+
+    {% if result %}
+      <div class="module">
+        <h2>{% translate "Resultado sugerido" %}</h2>
+
+        {% if not result.capacity_ok %}
+          <p style="margin: 10px 0 0; color: #b91c1c;">
+            {% translate "Advertencia:" %}
+            {% translate "La cantidad sugerida supera el máximo de boletos configurado en la rifa (considerando la oferta)." %}
+          </p>
+        {% endif %}
+
+        <table style="width:100%;">
+          <tbody>
+            <tr>
+              <th style="width: 40%;">{% translate "Precio por boleto" %}</th>
+              <td>RD$ {{ result.price|intcomma }}</td>
+            </tr>
+            <tr>
+              <th>{% translate "Costos totales" %}</th>
+              <td>RD$ {{ result.total_cost|intcomma }}</td>
+            </tr>
+            <tr>
+              <th>{% translate "Margen deseado" %}</th>
+              <td>{{ result.margin_pct }}%</td>
+            </tr>
+            <tr>
+              <th>{% translate "Ingresos necesarios (meta)" %}</th>
+              <td>RD$ {{ result.revenue_needed|intcomma }}</td>
+            </tr>
+            <tr>
+              <th>{% translate "Boletos para punto de equilibrio" %}</th>
+              <td>{{ result.break_even_tickets|intcomma }}</td>
+            </tr>
+            <tr>
+              <th>{% translate "Boletos sugeridos a vender" %}</th>
+              <td><strong>{{ result.tickets_needed|intcomma }}</strong></td>
+            </tr>
+            {% if result.offer %}
+              <tr>
+                <th>{% translate "Oferta activa" %}</th>
+                <td>
+                  {% translate "Compra" %} {{ result.offer.buy_quantity|intcomma }}
+                  {% translate "y recibe" %} {{ result.offer.bonus_quantity|intcomma }}
+                  {% translate "gratis" %}
+                  {% if result.offer.min_paid_quantity %}
+                    (min: {{ result.offer.min_paid_quantity|intcomma }})
+                  {% endif %}
+                </td>
+              </tr>
+              <tr>
+                <th>{% translate "Boletos gratis (por oferta)" %}</th>
+                <td>{{ result.bonus_tickets|intcomma }}</td>
+              </tr>
+              <tr>
+                <th>{% translate "Total de boletos emitidos (pagados + oferta)" %}</th>
+                <td><strong>{{ result.total_issued|intcomma }}</strong></td>
+              </tr>
+            {% endif %}
+            <tr>
+              <th>{% translate "Ingresos estimados con esa cantidad" %}</th>
+              <td>RD$ {{ result.expected_revenue|intcomma }}</td>
+            </tr>
+            <tr>
+              <th>{% translate "Ganancia estimada" %}</th>
+              <td>RD$ {{ result.expected_profit|intcomma }}</td>
+            </tr>
+            {% if result.max_tickets %}
+              <tr>
+                <th>{% translate "Máximo de boletos actual (rifa)" %}</th>
+                <td>{{ result.max_tickets|intcomma }}</td>
+              </tr>
+            {% endif %}
+            {% if result.max_tickets and result.offer and result.max_paid_possible != None %}
+              <tr>
+                <th>{% translate "Máx. boletos pagados posibles con oferta (según max)" %}</th>
+                <td>{{ result.max_paid_possible|intcomma }}</td>
+              </tr>
+              <tr>
+                <th>{% translate "Máx. ingresos posibles (según max)" %}</th>
+                <td>RD$ {{ result.max_revenue_possible|intcomma }}</td>
+              </tr>
+            {% endif %}
+          </tbody>
+        </table>
+
+        <p style="margin: 10px 0 0; color: #6b7280;">
+          {% translate "Tip:" %}
+          {% translate "Si quieres ser más conservador, suma un extra a Publicidad/Envío o aumenta el margen." %}
+        </p>
+      </div>
+    {% endif %}
+  </div>
+{% endblock %}
+

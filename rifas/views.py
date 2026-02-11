@@ -15,7 +15,13 @@ from django.core.cache import cache
 from django.core.mail import send_mail
 from django.utils.translation import gettext as _
 
-from .forms import AdminPasswordRecoverForm, AdminWinnerLookupForm, TicketLookupForm, TicketPurchaseForm
+from .forms import (
+    AdminPasswordRecoverForm,
+    AdminRaffleCalculatorForm,
+    AdminWinnerLookupForm,
+    TicketLookupForm,
+    TicketPurchaseForm,
+)
 from .emails import send_customer_purchase_received, send_purchase_notification
 from .models import BankAccount, Raffle, SiteContent, Ticket, TicketPurchase, UserSecurity
 
@@ -121,6 +127,91 @@ def raffle_history(request):
         .order_by("-draw_date")
     )
     return render(request, "rifas/history.html", {"finished": finished})
+
+
+@staff_member_required
+@require_http_methods(["GET", "POST"])
+def admin_raffle_calculator(request):
+    """
+    Admin-only calculator: estimate needed tickets given costs + desired margin
+    and the raffle's ticket price.
+    """
+    from decimal import Decimal, ROUND_CEILING
+    from math import ceil
+
+    ctx = admin_site.each_context(request)
+    form = AdminRaffleCalculatorForm(request.POST or None)
+    result = None
+
+    if request.method == "POST" and form.is_valid():
+        raffle: Raffle = form.cleaned_data["raffle"]
+        price = int(getattr(raffle, "price_per_ticket", 0) or 0)
+        if price <= 0:
+            form.add_error("raffle", "La rifa debe tener un precio por boleto mayor que 0.")
+        else:
+            product_cost = int(form.cleaned_data["product_cost"] or 0)
+            shipping_cost = int(form.cleaned_data["shipping_cost"] or 0)
+            advertising_cost = int(form.cleaned_data["advertising_cost"] or 0)
+            margin_pct: Decimal = form.cleaned_data["desired_margin_percent"] or Decimal("0")
+
+            total_cost = product_cost + shipping_cost + advertising_cost
+            multiplier = Decimal("1") + (Decimal(margin_pct) / Decimal("100"))
+            revenue_needed = (Decimal(total_cost) * multiplier).to_integral_value(rounding=ROUND_CEILING)
+            revenue_needed_int = int(revenue_needed)
+
+            break_even_tickets = ceil(total_cost / price) if total_cost > 0 else 0
+            tickets_needed = ceil(revenue_needed_int / price) if revenue_needed_int > 0 else 0
+
+            expected_revenue = tickets_needed * price
+            expected_profit = expected_revenue - total_cost
+
+            max_tickets = int(getattr(raffle, "max_tickets", 0) or 0)
+
+            # Offers affect how many TOTAL tickets get issued (paid + bonus),
+            # which matters for max_tickets capacity.
+            offer = raffle.get_active_offer()
+            bonus_tickets = int(offer.bonus_for(tickets_needed)) if offer else 0
+            total_issued = int(tickets_needed) + int(bonus_tickets)
+
+            capacity_ok = (max_tickets <= 0) or (total_issued <= max_tickets)
+
+            # If max_tickets is set, compute max paid tickets possible under offer:
+            # find largest paid_qty such that paid_qty + bonus_for(paid_qty) <= max_tickets.
+            max_paid_possible = None
+            max_revenue_possible = None
+            if max_tickets > 0 and offer:
+                lo, hi = 0, max_tickets
+                while lo < hi:
+                    mid = (lo + hi + 1) // 2
+                    tot = mid + int(offer.bonus_for(mid))
+                    if tot <= max_tickets:
+                        lo = mid
+                    else:
+                        hi = mid - 1
+                max_paid_possible = int(lo)
+                max_revenue_possible = int(max_paid_possible * price)
+
+            result = {
+                "raffle": raffle,
+                "price": price,
+                "total_cost": total_cost,
+                "margin_pct": margin_pct,
+                "revenue_needed": revenue_needed_int,
+                "break_even_tickets": break_even_tickets,
+                "tickets_needed": tickets_needed,
+                "bonus_tickets": bonus_tickets,
+                "total_issued": total_issued,
+                "offer": offer,
+                "expected_revenue": expected_revenue,
+                "expected_profit": expected_profit,
+                "max_tickets": max_tickets,
+                "capacity_ok": capacity_ok,
+                "max_paid_possible": max_paid_possible,
+                "max_revenue_possible": max_revenue_possible,
+            }
+
+    ctx.update({"title": "Calculadora de boletos", "form": form, "result": result})
+    return render(request, "admin/raffle_calculator.html", ctx)
 
 
 @cache_page(PUBLIC_PAGE_CACHE_SECONDS)

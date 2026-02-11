@@ -1,0 +1,141 @@
+/* GanaHoyRD — Admin styling (clean + responsive) */
+
+:root {
+  --gh-emerald: #10b981;
+  --gh-emerald-600: #059669;
+  --gh-bg: #0b1220;
+  --gh-card: #0f172a;
+  --gh-border: rgba(148, 163, 184, 0.18);
+  --gh-muted: #94a3b8;
+}
+
+/* Keep Django defaults, just polish spacing & readability */
+body {
+  background: #0b1020;
+}
+
+#container {
+  background: transparent;
+}
+
+/* Center content and limit max width */
+#content {
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+/* Header */
+#header {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+#header,
+#header a:link,
+#header a:visited {
+  color: #e2e8f0;
+}
+
+#header a:hover {
+  color: white;
+}
+
+/* Modules / cards */
+.module,
+.inline-group {
+  border-radius: 14px;
+  border: 1px solid var(--gh-border);
+  overflow: hidden;
+}
+
+.module h2,
+.inline-group h2 {
+  background: rgba(255, 255, 255, 0.04);
+  color: #e2e8f0;
+  border-bottom: 1px solid var(--gh-border);
+}
+
+/* Tables */
+table {
+  border-collapse: collapse;
+}
+
+thead th {
+  background: rgba(255, 255, 255, 0.03);
+  color: #e2e8f0;
+  border-bottom: 1px solid var(--gh-border);
+}
+
+tbody td,
+tbody th {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+tr:hover td,
+tr:hover th {
+  background: rgba(16, 185, 129, 0.06);
+}
+
+/* Buttons */
+.button,
+input[type="submit"],
+input[type="button"],
+input[type="reset"] {
+  border-radius: 10px;
+}
+
+.button.default,
+input[type="submit"].default {
+  background: linear-gradient(90deg, var(--gh-emerald), var(--gh-emerald-600));
+  border: 0;
+}
+
+.button.default:hover,
+input[type="submit"].default:hover {
+  filter: brightness(1.05);
+}
+
+/* Forms: improve spacing */
+.form-row {
+  padding: 14px 16px;
+}
+
+.form-row input,
+.form-row select,
+.form-row textarea {
+  border-radius: 12px;
+}
+
+/* Responsive admin forms: stack labels on small screens */
+@media (max-width: 900px) {
+  #content {
+    margin: 0 10px;
+  }
+
+  .aligned .form-row > div {
+    float: none;
+    width: 100%;
+  }
+
+  .aligned .form-row label {
+    float: none;
+    width: auto;
+    display: block;
+    margin: 0 0 6px;
+  }
+
+  .aligned .form-row .help {
+    margin-left: 0;
+  }
+}
+
+/* Sidebar: hide on small screens (keep it for desktop organization) */
+@media (max-width: 900px) {
+  #nav-sidebar,
+  #toggle-nav-sidebar {
+    display: none !important;
+  }
+  #content {
+    margin-left: 0 !important;
+  }
+}
+

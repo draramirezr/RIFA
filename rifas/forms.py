@@ -353,3 +353,43 @@ class AdminWinnerLookupForm(forms.Form):
             raise ValidationError("El número de boleto debe ser mayor que 0.")
         return n
 
+
+class AdminRaffleCalculatorForm(forms.Form):
+    raffle = forms.ModelChoiceField(
+        queryset=Raffle.objects.all().order_by("-created_at"),
+        required=True,
+        empty_label=None,
+        label="Rifa",
+        help_text="Se usa el precio por boleto de la rifa.",
+    )
+    product_cost = forms.IntegerField(min_value=0, label="Costo del producto (RD$)", initial=0)
+    shipping_cost = forms.IntegerField(min_value=0, label="Envío (RD$)", initial=0)
+    advertising_cost = forms.IntegerField(min_value=0, label="Publicidad (RD$)", initial=0)
+    desired_margin_percent = forms.DecimalField(
+        min_value=0,
+        max_digits=6,
+        decimal_places=2,
+        label="Margen deseado (%)",
+        help_text="Porcentaje de ganancia sobre el total de costos.",
+        initial="25",
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        base_input = (
+            "w-full rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3 "
+            "text-slate-100 placeholder:text-slate-500 outline-none "
+            "focus:border-emerald-400/60 focus:ring-2 focus:ring-emerald-400/15"
+        )
+        base_select = (
+            "w-full rounded-xl border border-white/10 bg-slate-950/40 px-3 py-3 "
+            "text-slate-100 outline-none focus:border-emerald-400/60 focus:ring-2 focus:ring-emerald-400/15"
+        )
+
+        self.fields["raffle"].widget.attrs.setdefault("class", base_select)
+        for k in ("product_cost", "shipping_cost", "advertising_cost", "desired_margin_percent"):
+            self.fields[k].widget.attrs.setdefault("class", base_input)
+        for k in ("product_cost", "shipping_cost", "advertising_cost"):
+            self.fields[k].widget.attrs.setdefault("inputmode", "numeric")
+            self.fields[k].widget.attrs.setdefault("pattern", "[0-9]*")
+
