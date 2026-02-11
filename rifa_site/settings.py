@@ -148,9 +148,17 @@ if DB_ENGINE == "mysql":
             "PASSWORD": os.environ.get("DB_PASSWORD", ""),
             "HOST": os.environ.get("DB_HOST", "127.0.0.1"),
             "PORT": os.environ.get("DB_PORT", "3306"),
+            # Keep connections open a bit (Railway proxies can drop idle conns).
+            # Health checks will reconnect transparently if server dropped it.
+            "CONN_MAX_AGE": int(os.environ.get("DB_CONN_MAX_AGE", "60")),
+            "CONN_HEALTH_CHECKS": True,
             "OPTIONS": {
                 "charset": "utf8mb4",
                 "init_command": "SET sql_mode='STRICT_TRANS_TABLES'",
+                # Timeouts (seconds). Helps with transient proxy hiccups.
+                "connect_timeout": int(os.environ.get("DB_CONNECT_TIMEOUT", "15")),
+                "read_timeout": int(os.environ.get("DB_READ_TIMEOUT", "30")),
+                "write_timeout": int(os.environ.get("DB_WRITE_TIMEOUT", "30")),
             },
         }
     }
