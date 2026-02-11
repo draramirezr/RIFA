@@ -2,6 +2,7 @@ from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.db import models
 from django.utils import timezone
+from django.views.decorators.cache import cache_page
 from django.views.decorators.http import require_http_methods
 
 import secrets
@@ -19,6 +20,10 @@ from .emails import send_purchase_notification
 from .models import BankAccount, Raffle, SiteContent, Ticket, TicketPurchase, UserSecurity
 
 
+PUBLIC_PAGE_CACHE_SECONDS = 60
+
+
+@cache_page(PUBLIC_PAGE_CACHE_SECONDS)
 def home(request):
     raffles = (
         Raffle.objects.filter(is_active=True)
@@ -29,6 +34,7 @@ def home(request):
     return render(request, "rifas/home.html", {"raffles": raffles})
 
 
+@cache_page(PUBLIC_PAGE_CACHE_SECONDS)
 def raffle_detail(request, slug: str):
     # Allow viewing inactive/finished raffles (needed for Historial).
     try:
@@ -116,6 +122,7 @@ def raffle_history(request):
     return render(request, "rifas/history.html", {"finished": finished})
 
 
+@cache_page(PUBLIC_PAGE_CACHE_SECONDS)
 def terms(request):
     return render(request, "rifas/terms.html", {})
 
