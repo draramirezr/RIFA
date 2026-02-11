@@ -25,8 +25,8 @@ def home(request):
         .annotate(sold_tickets_annot=models.Count("tickets"))
         .order_by("draw_date")
     )
-    site = SiteContent.get_solo()
-    return render(request, "rifas/home.html", {"raffles": raffles, "site": site})
+    # `site` is provided globally via context processor (cached).
+    return render(request, "rifas/home.html", {"raffles": raffles})
 
 
 def raffle_detail(request, slug: str):
@@ -54,7 +54,6 @@ def buy_ticket(request, slug: str):
         return render(request, "rifas/sold_out.html", {"raffle": raffle}, status=403)
 
     offer = raffle.get_active_offer()
-    site = SiteContent.get_solo()
     bank_accounts = list(BankAccount.objects.filter(is_active=True).order_by("sort_order", "created_at")[:4])
 
     if request.method == "POST":
@@ -73,7 +72,7 @@ def buy_ticket(request, slug: str):
     return render(
         request,
         "rifas/buy_ticket.html",
-        {"raffle": raffle, "form": form, "offer": offer, "site": site, "bank_accounts": bank_accounts},
+        {"raffle": raffle, "form": form, "offer": offer, "bank_accounts": bank_accounts},
     )
 
 
@@ -84,7 +83,6 @@ def thanks(request, purchase_id: int):
 
 @require_http_methods(["GET", "POST"])
 def my_tickets(request):
-    site = SiteContent.get_solo()
     form = TicketLookupForm(request.POST or None)
     purchases = []
     raffle = None
@@ -104,24 +102,22 @@ def my_tickets(request):
     return render(
         request,
         "rifas/my_tickets.html",
-        {"form": form, "purchases": purchases, "raffle": raffle, "site": site},
+        {"form": form, "purchases": purchases, "raffle": raffle},
     )
 
 
 def raffle_history(request):
-    site = SiteContent.get_solo()
     now = timezone.now()
     finished = (
         Raffle.objects.filter(models.Q(draw_date__lte=now) | models.Q(is_active=False))
         .filter(show_in_history=True)
         .order_by("-draw_date")
     )
-    return render(request, "rifas/history.html", {"finished": finished, "site": site})
+    return render(request, "rifas/history.html", {"finished": finished})
 
 
 def terms(request):
-    site = SiteContent.get_solo()
-    return render(request, "rifas/terms.html", {"site": site})
+    return render(request, "rifas/terms.html", {})
 
 
 @require_http_methods(["GET", "POST"])
