@@ -44,13 +44,13 @@
             </div>
           </div>
 
-          {% if raffle.winner_name or raffle.winner_ticket_number or raffle.winner_media or raffle.winner_notes %}
+          {% if raffle.winner_display_name or raffle.winner_ticket_number or raffle.winner_media or raffle.winner_notes %}
             <div class="mt-5">
               <div class="text-sm font-semibold text-slate-100">Ganador(a)</div>
-              {% if raffle.winner_name or raffle.winner_ticket_number %}
+              {% if raffle.winner_display_name or raffle.winner_ticket_number %}
                 <div class="mt-1 text-sm text-slate-300">
-                  {% if raffle.winner_name %}
-                    Nombre: <span class="text-slate-100 font-semibold">{{ raffle.winner_name }}</span>
+                  {% if raffle.winner_display_name %}
+                    Nombre: <span class="text-slate-100 font-semibold">{{ raffle.winner_display_name }}</span>
                   {% endif %}
                   {% if raffle.winner_ticket_display %}
                     <span class="mx-2 text-white/20">|</span>

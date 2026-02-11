@@ -127,7 +127,7 @@ class Raffle(models.Model):
     winner_name = models.CharField(
         max_length=120,
         blank=True,
-        help_text="Opcional. Nombre del ganador(a) para mostrar en el historial.",
+        help_text="Opcional. Si se deja vacío, se toma automáticamente del comprador del boleto ganador.",
     )
     winner_ticket_number = models.PositiveIntegerField(
         null=True,
@@ -220,6 +220,35 @@ class Raffle(models.Model):
         if width:
             return f"{int(n):0{width}d}"
         return str(int(n))
+
+    @property
+    def winner_display_name(self) -> str:
+        """
+        Winner name to show publicly.
+        Priority:
+        1) Manual winner_name (if set)
+        2) Ticket purchaser full_name for winner_ticket_number (if available)
+        """
+        if (self.winner_name or "").strip():
+            return (self.winner_name or "").strip()
+        n = getattr(self, "winner_ticket_number", None)
+        if not n:
+            return ""
+        try:
+            from django.apps import apps
+
+            Ticket = apps.get_model("rifas", "Ticket")
+            t = (
+                Ticket.objects.select_related("purchase")
+                .filter(raffle_id=self.id, number=int(n))
+                .order_by("-id")
+                .first()
+            )
+            if t and getattr(t, "purchase", None):
+                return (getattr(t.purchase, "full_name", "") or "").strip()
+        except Exception:
+            return ""
+        return ""
 
     @property
     def is_finished(self) -> bool:
