@@ -46,6 +46,8 @@ SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 if not DEBUG:
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
+    SESSION_COOKIE_HTTPONLY = True
+    CSRF_COOKIE_HTTPONLY = True
     # Start low (safe) and increase once you're sure HTTPS is always on.
     SECURE_HSTS_SECONDS = int(os.environ.get("SECURE_HSTS_SECONDS", "60"))
     SECURE_HSTS_INCLUDE_SUBDOMAINS = os.environ.get("SECURE_HSTS_INCLUDE_SUBDOMAINS", "0") == "1"
@@ -54,8 +56,14 @@ if not DEBUG:
     SECURE_SSL_REDIRECT = os.environ.get("SECURE_SSL_REDIRECT", "1") == "1"
     SECURE_CONTENT_TYPE_NOSNIFF = True
     SECURE_REFERRER_POLICY = os.environ.get("SECURE_REFERRER_POLICY", "same-origin")
+    SECURE_CROSS_ORIGIN_OPENER_POLICY = os.environ.get("SECURE_CROSS_ORIGIN_OPENER_POLICY", "same-origin")
+    # Helps prevent other sites from embedding/reading our resources.
+    # Keep permissive enough for normal operation.
+    SECURE_CROSS_ORIGIN_RESOURCE_POLICY = os.environ.get("SECURE_CROSS_ORIGIN_RESOURCE_POLICY", "same-site")
     SESSION_COOKIE_SAMESITE = os.environ.get("SESSION_COOKIE_SAMESITE", "Lax")
     CSRF_COOKIE_SAMESITE = os.environ.get("CSRF_COOKIE_SAMESITE", "Lax")
+
+X_FRAME_OPTIONS = os.environ.get("X_FRAME_OPTIONS", "DENY")
 
 
 # Application definition
