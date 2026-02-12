@@ -1,12 +1,29 @@
 from __future__ import annotations
 
 import mimetypes
+import threading
 
 from django.conf import settings
 from django.core.mail import EmailMessage
 from django.utils import timezone
 
 from .models import TicketPurchase
+
+
+def _send_async(email: EmailMessage) -> None:
+    """
+    Send email in a background thread so web requests don't hang
+    if SMTP is slow/unreachable.
+    """
+
+    def _runner():
+        try:
+            email.send(fail_silently=True)
+        except Exception:
+            return
+
+    t = threading.Thread(target=_runner, daemon=True)
+    t.start()
 
 
 def _should_send_customer_emails() -> bool:
@@ -74,7 +91,7 @@ def send_purchase_notification(*, request, purchase: TicketPurchase) -> None:
 
     _safe_attach_image(email, purchase)
 
-    email.send(fail_silently=True)
+    _send_async(email)
 
 
 def send_customer_purchase_received(*, purchase: TicketPurchase) -> None:
@@ -103,7 +120,7 @@ def send_customer_purchase_received(*, purchase: TicketPurchase) -> None:
             "— GanaHoyRD",
         ]
     )
-    EmailMessage(subject=subject, body=body, to=[to_email]).send(fail_silently=True)
+    _send_async(EmailMessage(subject=subject, body=body, to=[to_email]))
 
 
 def send_customer_purchase_status(*, purchase: TicketPurchase) -> None:
@@ -162,5 +179,5 @@ def send_customer_purchase_status(*, purchase: TicketPurchase) -> None:
         lines += ["", f"Estado: {status}"]
 
     lines += ["", "— GanaHoyRD"]
-    EmailMessage(subject=subject, body="\n".join(lines), to=[to_email]).send(fail_silently=True)
+    _send_async(EmailMessage(subject=subject, body="\n".join(lines), to=[to_email]))
 
