@@ -76,8 +76,15 @@ def buy_ticket(request, slug: str):
             purchase.client_ip = request.META.get("REMOTE_ADDR")
             purchase.user_agent = (request.META.get("HTTP_USER_AGENT") or "")[:400]
             purchase.save()
-            send_purchase_notification(request=request, purchase=purchase)
-            send_customer_purchase_received(purchase=purchase)
+            # Emails must NEVER block or break purchases (SMTP may be blocked in hosting).
+            try:
+                send_purchase_notification(request=request, purchase=purchase)
+            except Exception:
+                pass
+            try:
+                send_customer_purchase_received(purchase=purchase)
+            except Exception:
+                pass
             return redirect("rifas:thanks", purchase_id=purchase.id)
     else:
         form = TicketPurchaseForm(raffle=raffle)
