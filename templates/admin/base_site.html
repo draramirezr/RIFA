@@ -158,12 +158,14 @@
       <a href="{% url 'admin:index' %}">{{ site_header|default:_("Administración") }}</a>
     </h1>
     {% if request.user.is_staff %}
-      <a href="{% url 'admin_winner_search' %}" class="button" style="margin-top:2px;">
+      <div class="gh-admin-tools" style="display:flex; gap:8px; flex-wrap:wrap; margin-top:2px;">
+      <a href="{% url 'admin_winner_search' %}" class="button" style="margin:0;">
         {% translate "Buscar boleto ganador" %}
       </a>
-      <a href="{% url 'admin_raffle_calculator' %}" class="button" style="margin-top:2px;">
-        {% translate "Calculadora de boletos" %}
+      <a href="{% url 'admin_raffle_calculator' %}" class="button default" style="margin:0;">
+        {% translate "Calculadora de rifa" %}
       </a>
+      </div>
     {% endif %}
   </div>
 {% endblock %}

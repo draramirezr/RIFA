@@ -1,0 +1,26 @@
+{% extends "admin/index.html" %}
+{% load i18n %}
+
+{% block content %}
+  {% if request.user.is_staff %}
+    <div class="module" style="margin-bottom: 16px;">
+      <h2>{% translate "Herramientas" %}</h2>
+      <div style="padding: 12px 14px;">
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <a class="button default" href="{% url 'admin_raffle_calculator' %}">
+            {% translate "Calculadora de rifa" %}
+          </a>
+          <a class="button" href="{% url 'admin_winner_search' %}">
+            {% translate "Buscar boleto ganador" %}
+          </a>
+        </div>
+        <p class="help" style="margin-top: 10px;">
+          {% translate "La calculadora usa el precio por boleto de la rifa y toma en cuenta ofertas (boletos gratis) para validar el máximo de boletos." %}
+        </p>
+      </div>
+    </div>
+  {% endif %}
+
+  {{ block.super }}
+{% endblock %}
+
