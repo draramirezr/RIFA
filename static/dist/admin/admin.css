@@ -104,3 +104,35 @@ tr:hover th {
   }
 }
 
+/* Admin changelist: make tables usable on mobile */
+@media (max-width: 900px) {
+  #changelist {
+    display: block;
+  }
+
+  /* Results table horizontal scroll */
+  #changelist-form .results {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border-radius: 12px;
+  }
+  #changelist-form .results table {
+    min-width: 820px; /* allow scroll instead of squish */
+  }
+
+  /* Filters: move under results */
+  #changelist-filter {
+    float: none;
+    width: auto;
+    margin: 12px 0 0;
+  }
+
+  /* Action bar: wrap */
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+}
+

@@ -9,17 +9,17 @@
   </div>
 
   {% if finished %}
-    <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+    <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3">
       {% for raffle in finished %}
         <div class="rounded-2xl border border-white/10 bg-white/5 overflow-hidden">
           {% if raffle.history_cover_image %}
             <img src="{{ raffle.history_cover_image.url }}" alt="{{ raffle.title }}"
                  loading="lazy" decoding="async"
-                 class="h-56 w-full object-cover" />
+                 class="h-48 sm:h-56 w-full object-cover" />
           {% elif raffle.image %}
             <img src="{{ raffle.image.url }}" alt="{{ raffle.title }}"
                  loading="lazy" decoding="async"
-                 class="h-56 w-full object-cover" />
+                 class="h-48 sm:h-56 w-full object-cover" />
           {% endif %}
 
           <div class="p-5">

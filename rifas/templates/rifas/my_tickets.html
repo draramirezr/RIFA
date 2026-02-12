@@ -5,7 +5,7 @@
 {% block meta_robots %}<meta name="robots" content="noindex,nofollow">{% endblock %}
 
 {% block content %}
-  <div class="max-w-3xl">
+  <div class="mx-auto max-w-3xl lg:max-w-4xl">
     <h1 class="text-3xl font-semibold tracking-tight">Mis boletos</h1>
     <p class="mt-2 text-slate-300">
       Consulta el estado de tus compras y tus números de boleto cuando estén aprobados.
@@ -70,7 +70,7 @@
               {% endif %}
             </div>
 
-            <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3 text-sm">
+            <div class="mt-4 grid grid-cols-1 gap-4 min-[480px]:grid-cols-2 sm:grid-cols-3 text-sm">
               <div class="rounded-xl border border-white/10 bg-slate-950/40 p-4">
                 <div class="text-slate-400">Boletos</div>
                 <div class="mt-1 font-semibold text-slate-100">{{ p.quantity|intcomma }}</div>

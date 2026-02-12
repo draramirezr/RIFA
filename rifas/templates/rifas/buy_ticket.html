@@ -171,7 +171,7 @@
         <div class="text-lg font-semibold">Métodos de pago</div>
         {% if form.bank_account.errors %}<div class="mt-2 text-sm text-red-300">{{ form.bank_account.errors }}</div>{% endif %}
         {% if bank_accounts %}
-          <div class="mt-4 grid grid-cols-4 gap-2">
+          <div class="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-4">
             {% for b in bank_accounts %}
               <button type="button"
                       class="bankBtn group flex h-12 w-12 items-center justify-center rounded-xl border border-white/10 bg-slate-950/40 hover:bg-slate-950/60 sm:h-14 sm:w-14"
