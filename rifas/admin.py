@@ -58,11 +58,19 @@ class RaffleAdmin(admin.ModelAdmin):
         queryset.update(show_in_history=False)
 
     def save_model(self, request, obj, form, change):
-        from .emails import send_winner_notification
+        from .emails import send_winner_notification_sync
+        from .audit import log_event
 
         prev_winner = None
+        prev_active = None
+        prev_hist = None
         if change and obj.pk:
-            prev_winner = Raffle.objects.filter(pk=obj.pk).values_list("winner_ticket_number", flat=True).first()
+            prev_winner, prev_active, prev_hist = (
+                Raffle.objects.filter(pk=obj.pk)
+                .values_list("winner_ticket_number", "is_active", "show_in_history")
+                .first()
+                or (None, None, None)
+            )
 
         # Best-effort: validate raffle video duration <= 20s using metadata.
         # If it fails to read duration, we allow upload but recommend using MP4/WebM.
@@ -91,7 +99,14 @@ class RaffleAdmin(admin.ModelAdmin):
         # Notify winner when winner ticket changes/gets set.
         try:
             new_winner = getattr(obj, "winner_ticket_number", None)
-            if new_winner and int(new_winner) != int(prev_winner or 0):
+            became_inactive = (prev_active is True) and (obj.is_active is False)
+            became_history = (prev_hist is False) and (obj.show_in_history is True)
+            winner_changed = bool(new_winner and int(new_winner) != int(prev_winner or 0))
+
+            # Your rule: send when raffle is inactive + shown in history + winner is set.
+            should_notify = bool(new_winner and (obj.is_active is False) and bool(obj.show_in_history) and (winner_changed or became_inactive or became_history))
+
+            if should_notify:
                 t = (
                     Ticket.objects.select_related("purchase")
                     .filter(raffle=obj, number=int(new_winner))
@@ -99,23 +114,51 @@ class RaffleAdmin(admin.ModelAdmin):
                     .first()
                 )
                 purchase = getattr(t, "purchase", None) if t else None
-                if purchase and (getattr(purchase, "email", "") or "").strip():
+                if not t:
+                    self.message_user(
+                        request,
+                        "No se pudo enviar: ese boleto no existe en la rifa. "
+                        "Asegúrate de que la compra esté APROBADA (los boletos se crean al aprobar).",
+                        level=messages.WARNING,
+                    )
+                    log_event(
+                        request=request,
+                        action=AuditEvent.Action.WINNER_SET,
+                        raffle=obj,
+                        from_status="",
+                        to_status="",
+                        notes="Intento de notificación: ticket no encontrado.",
+                        extra={"winner_ticket_number": int(new_winner)},
+                    )
+                elif purchase and (getattr(purchase, "email", "") or "").strip():
                     inferred = ""
                     try:
                         inferred = request.build_absolute_uri("/").rstrip("/")
                     except Exception:
                         inferred = ""
-                    send_winner_notification(
+                    ok, err = send_winner_notification_sync(
                         raffle=obj,
                         purchase=purchase,
                         ticket_display=obj.winner_ticket_display,
                         site_url=(getattr(settings, "SITE_URL", "") or inferred),
                     )
-                    self.message_user(request, "Correo enviado al ganador.", level=messages.SUCCESS)
+                    log_event(
+                        request=request,
+                        action=AuditEvent.Action.WINNER_SET,
+                        raffle=obj,
+                        purchase=purchase,
+                        ticket=t,
+                        notes=("Correo ganador enviado." if ok else f"Fallo correo ganador: {err}"),
+                        extra={"winner_ticket_number": int(new_winner), "email": getattr(purchase, "email", ""), "sent": ok},
+                    )
+                    if ok:
+                        self.message_user(request, "Correo de felicitación enviado al ganador.", level=messages.SUCCESS)
+                    else:
+                        self.message_user(request, f"No se pudo enviar correo al ganador: {err}", level=messages.ERROR)
                 else:
                     self.message_user(
                         request,
-                        "No se pudo enviar correo: el boleto ganador no tiene email registrado.",
+                        "No se pudo enviar: el ganador no tiene email registrado en la compra.",
                         level=messages.WARNING,
                     )
         except Exception:

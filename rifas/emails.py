@@ -192,6 +192,25 @@ def _send_async(email: EmailMessage) -> None:
     t.start()
 
 
+def _send_now(email: EmailMessage) -> tuple[bool, str]:
+    """
+    Send immediately (synchronous) so admin can show success/failure.
+    Returns (ok, error_message).
+    """
+    try:
+        if getattr(settings, "SENDGRID_USE_API", False) and getattr(settings, "SENDGRID_API_KEY", ""):
+            _send_via_sendgrid_api(email)
+            return True, ""
+        # SMTP/backend
+        sent = email.send(fail_silently=False)
+        return (sent >= 1), ("" if sent else "No se pudo enviar (sent=0).")
+    except Exception as e:
+        msg = str(e) or e.__class__.__name__
+        if getattr(settings, "EMAIL_LOG_ERRORS", False):
+            logger.warning("Email send failed: %s", msg, exc_info=True)
+        return False, msg
+
+
 def _should_send_customer_emails() -> bool:
     return bool(getattr(settings, "SEND_CUSTOMER_EMAILS", False))
 
@@ -420,7 +439,7 @@ def send_winner_notification(*, raffle, purchase, ticket_display: str, site_url:
     """
     Email to the winner when raffle winner ticket is assigned in admin.
     """
-    if not _should_send_customer_emails():
+    if not getattr(settings, "SEND_WINNER_EMAILS", True):
         return
     to_email = (getattr(purchase, "email", "") or "").strip()
     if not to_email:
@@ -455,4 +474,46 @@ def send_winner_notification(*, raffle, purchase, ticket_display: str, site_url:
         cta_url=raffle_url,
     )
     _send_async(_make_html_email(subject=subject, to=[to_email], text=text, html=html))
+
+
+def send_winner_notification_sync(*, raffle, purchase, ticket_display: str, site_url: str | None = None) -> tuple[bool, str]:
+    """
+    Synchronous winner email (returns success + error for admin feedback).
+    """
+    if not getattr(settings, "SEND_WINNER_EMAILS", True):
+        return False, "Envio de correo al ganador deshabilitado (SEND_WINNER_EMAILS=0)."
+    to_email = (getattr(purchase, "email", "") or "").strip()
+    if not to_email:
+        return False, "El ganador no tiene email."
+
+    subject = f"¡Felicidades! Ganaste la rifa - {getattr(raffle, 'title', '')}"
+    text = "\n".join(
+        [
+            "¡Felicidades!",
+            "",
+            "Has resultado ganador(a) en GanaHoyRD.",
+            f"Rifa: {getattr(raffle, 'title', '')}",
+            f"Boleto ganador: #{ticket_display}",
+            "",
+            "Nos pondremos en contacto contigo para coordinar la entrega.",
+            "— GanaHoyRD",
+        ]
+    )
+    base = (site_url or getattr(settings, "SITE_URL", "") or "").strip().rstrip("/")
+    raffle_url = f"{base}/rifa/{getattr(raffle, 'slug', '')}/" if base else None
+    html = _email_shell(
+        title="¡Felicidades! Eres el ganador(a)",
+        lead="Premios reales y ganadores reales. Gracias por participar.",
+        body_html="<br>".join(
+            [
+                f"<b>Rifa:</b> {getattr(raffle, 'title', '')}",
+                f"<b>Boleto ganador:</b> #{ticket_display}",
+                "<br>Nos pondremos en contacto contigo para coordinar la entrega.",
+            ]
+        ),
+        cta_text="Ver la rifa",
+        cta_url=raffle_url,
+    )
+    email = _make_html_email(subject=subject, to=[to_email], text=text, html=html)
+    return _send_now(email)
 

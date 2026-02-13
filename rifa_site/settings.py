@@ -312,6 +312,7 @@ SITE_URL = (os.environ.get("SITE_URL", "") or "").strip().rstrip("/")
 PURCHASE_NOTIFY_EMAIL = os.environ.get("PURCHASE_NOTIFY_EMAIL", "")
 SEND_PURCHASE_EMAILS = os.environ.get("SEND_PURCHASE_EMAILS", "0") == "1"
 SEND_CUSTOMER_EMAILS = os.environ.get("SEND_CUSTOMER_EMAILS", "0") == "1"
+SEND_WINNER_EMAILS = os.environ.get("SEND_WINNER_EMAILS", "1") == "1"
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
