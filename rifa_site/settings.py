@@ -306,6 +306,7 @@ EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", SENDGRID_API_KEY if 
 EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "1") == "1"
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "GanaHoyRD <no-reply@rifas.local>")
 EMAIL_TIMEOUT = int(os.environ.get("EMAIL_TIMEOUT", "10"))  # seconds
+SITE_URL = (os.environ.get("SITE_URL", "") or "").strip().rstrip("/")
 
 # Where purchase proof notifications go (admin inbox)
 PURCHASE_NOTIFY_EMAIL = os.environ.get("PURCHASE_NOTIFY_EMAIL", "")

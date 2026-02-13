@@ -5,8 +5,10 @@ from django.core.exceptions import ValidationError
 from django.http import HttpResponse
 from django.utils.html import format_html
 from django.utils import timezone
+from django.urls import reverse
+from django.conf import settings
 
-from .models import BankAccount, Customer, Raffle, RaffleImage, RaffleOffer, SiteContent, Ticket, TicketPurchase, UserSecurity
+from .models import AuditEvent, BankAccount, Customer, Raffle, RaffleCalculation, RaffleImage, RaffleOffer, SiteContent, Ticket, TicketPurchase, UserSecurity
 
 # Admin UI (Spanish)
 admin.site.site_header = "GanaHoyRD — Administración"
@@ -56,6 +58,12 @@ class RaffleAdmin(admin.ModelAdmin):
         queryset.update(show_in_history=False)
 
     def save_model(self, request, obj, form, change):
+        from .emails import send_winner_notification
+
+        prev_winner = None
+        if change and obj.pk:
+            prev_winner = Raffle.objects.filter(pk=obj.pk).values_list("winner_ticket_number", flat=True).first()
+
         # Best-effort: validate raffle video duration <= 20s using metadata.
         # If it fails to read duration, we allow upload but recommend using MP4/WebM.
         if getattr(obj, "video", None):
@@ -78,7 +86,43 @@ class RaffleAdmin(admin.ModelAdmin):
                 pass
 
             # No transcoding: you will upload MP4/MOV already compatible.
-        return super().save_model(request, obj, form, change)
+        res = super().save_model(request, obj, form, change)
+
+        # Notify winner when winner ticket changes/gets set.
+        try:
+            new_winner = getattr(obj, "winner_ticket_number", None)
+            if new_winner and int(new_winner) != int(prev_winner or 0):
+                t = (
+                    Ticket.objects.select_related("purchase")
+                    .filter(raffle=obj, number=int(new_winner))
+                    .order_by("-id")
+                    .first()
+                )
+                purchase = getattr(t, "purchase", None) if t else None
+                if purchase and (getattr(purchase, "email", "") or "").strip():
+                    inferred = ""
+                    try:
+                        inferred = request.build_absolute_uri("/").rstrip("/")
+                    except Exception:
+                        inferred = ""
+                    send_winner_notification(
+                        raffle=obj,
+                        purchase=purchase,
+                        ticket_display=obj.winner_ticket_display,
+                        site_url=(getattr(settings, "SITE_URL", "") or inferred),
+                    )
+                    self.message_user(request, "Correo enviado al ganador.", level=messages.SUCCESS)
+                else:
+                    self.message_user(
+                        request,
+                        "No se pudo enviar correo: el boleto ganador no tiene email registrado.",
+                        level=messages.WARNING,
+                    )
+        except Exception:
+            # Never break admin save due to email issues.
+            pass
+
+        return res
 
     @admin.display(description="Boletos (vendidos/total)")
     def ticket_counter(self, obj: Raffle):
@@ -118,16 +162,35 @@ class RaffleAdmin(admin.ModelAdmin):
 @admin.action(description="Aprobar compras seleccionadas")
 def approve_purchases(modeladmin, request, queryset):
     from .emails import send_customer_purchase_status
+    from .audit import log_event
 
     for purchase in queryset.select_related("raffle"):
+        prev_status = purchase.status
         try:
             purchase.approve()
+            log_event(
+                request=request,
+                action=AuditEvent.Action.PURCHASE_APPROVED,
+                raffle=purchase.raffle,
+                purchase=purchase,
+                from_status=prev_status,
+                to_status=purchase.status,
+            )
             try:
                 send_customer_purchase_status(purchase=purchase)
             except Exception:
                 pass
         except ValueError as e:
             purchase.reject(notes=str(e))
+            log_event(
+                request=request,
+                action=AuditEvent.Action.PURCHASE_REJECTED,
+                raffle=purchase.raffle,
+                purchase=purchase,
+                from_status=prev_status,
+                to_status=purchase.status,
+                notes=str(e),
+            )
             try:
                 send_customer_purchase_status(purchase=purchase)
             except Exception:
@@ -142,9 +205,19 @@ def approve_purchases(modeladmin, request, queryset):
 @admin.action(description="Rechazar compras seleccionadas")
 def reject_purchases(modeladmin, request, queryset):
     from .emails import send_customer_purchase_status
+    from .audit import log_event
 
     for purchase in queryset.select_related("raffle"):
+        prev_status = purchase.status
         purchase.reject()
+        log_event(
+            request=request,
+            action=AuditEvent.Action.PURCHASE_REJECTED,
+            raffle=purchase.raffle,
+            purchase=purchase,
+            from_status=prev_status,
+            to_status=purchase.status,
+        )
         try:
             send_customer_purchase_status(purchase=purchase)
         except Exception:
@@ -244,6 +317,7 @@ class TicketPurchaseAdmin(admin.ModelAdmin):
 
     def save_model(self, request, obj, form, change):
         from .emails import send_customer_purchase_status
+        from .audit import log_event
 
         prev_status = None
         if change and obj.pk:
@@ -270,6 +344,64 @@ class TicketPurchaseAdmin(admin.ModelAdmin):
                 send_customer_purchase_status(purchase=obj)
             except Exception:
                 pass
+
+        # Audit status changes via manual edit.
+        try:
+            if change and prev_status and obj.status != prev_status:
+                action = (
+                    AuditEvent.Action.PURCHASE_APPROVED
+                    if obj.status == TicketPurchase.Status.APPROVED
+                    else AuditEvent.Action.PURCHASE_REJECTED
+                    if obj.status == TicketPurchase.Status.REJECTED
+                    else ""
+                )
+                if action:
+                    log_event(
+                        request=request,
+                        action=action,
+                        raffle=obj.raffle,
+                        purchase=obj,
+                        from_status=prev_status,
+                        to_status=obj.status,
+                        notes=(obj.admin_notes or ""),
+                    )
+        except Exception:
+            pass
+
+    def delete_model(self, request, obj):
+        from .audit import log_event
+
+        try:
+            log_event(
+                request=request,
+                action=AuditEvent.Action.PURCHASE_DELETED,
+                raffle=obj.raffle,
+                purchase=obj,
+                from_status=getattr(obj, "status", "") or "",
+                to_status="deleted",
+                notes="Eliminado desde admin.",
+            )
+        except Exception:
+            pass
+        return super().delete_model(request, obj)
+
+    def delete_queryset(self, request, queryset):
+        from .audit import log_event
+
+        try:
+            for p in queryset.select_related("raffle"):
+                log_event(
+                    request=request,
+                    action=AuditEvent.Action.PURCHASE_DELETED,
+                    raffle=p.raffle,
+                    purchase=p,
+                    from_status=getattr(p, "status", "") or "",
+                    to_status="deleted",
+                    notes="Eliminado en lote desde admin.",
+                )
+        except Exception:
+            pass
+        return super().delete_queryset(request, queryset)
 
 
 @admin.register(SiteContent)
@@ -373,6 +505,118 @@ class TicketAdmin(admin.ModelAdmin):
         if len(digits) >= 7:
             qs = qs | queryset.filter(purchase__phone__icontains=digits)
         return qs, use_distinct
+
+    def delete_model(self, request, obj):
+        from .audit import log_event
+
+        try:
+            log_event(
+                request=request,
+                action=AuditEvent.Action.TICKET_DELETED,
+                raffle=obj.raffle,
+                purchase=getattr(obj, "purchase", None),
+                ticket=obj,
+                notes=f"Eliminado boleto #{obj.display_number}.",
+            )
+        except Exception:
+            pass
+        return super().delete_model(request, obj)
+
+    def delete_queryset(self, request, queryset):
+        from .audit import log_event
+
+        try:
+            for t in queryset.select_related("raffle", "purchase"):
+                log_event(
+                    request=request,
+                    action=AuditEvent.Action.TICKET_DELETED,
+                    raffle=t.raffle,
+                    purchase=getattr(t, "purchase", None),
+                    ticket=t,
+                    notes=f"Eliminado en lote boleto #{t.display_number}.",
+                )
+        except Exception:
+            pass
+        return super().delete_queryset(request, queryset)
+
+
+@admin.register(AuditEvent)
+class AuditEventAdmin(admin.ModelAdmin):
+    list_display = ("created_at", "action", "actor", "raffle", "purchase", "ticket", "from_status", "to_status", "ip")
+    list_filter = ("action", "created_at", "actor", "raffle")
+    search_fields = ("purchase__public_reference", "purchase__full_name", "purchase__phone", "purchase__email", "ip", "user_agent")
+    readonly_fields = (
+        "created_at",
+        "action",
+        "actor",
+        "raffle",
+        "purchase",
+        "ticket",
+        "from_status",
+        "to_status",
+        "notes",
+        "extra",
+        "ip",
+        "user_agent",
+    )
+    fields = readonly_fields
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        # allow view
+        return True
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(RaffleCalculation)
+class RaffleCalculationAdmin(admin.ModelAdmin):
+    list_display = (
+        "created_at",
+        "raffle",
+        "created_by",
+        "ticket_price",
+        "total_cost",
+        "paid_tickets_needed",
+        "bonus_tickets",
+        "total_issued",
+        "expected_profit",
+    )
+    list_filter = ("created_at", "raffle", "created_by")
+    search_fields = ("raffle__title", "created_by__username")
+    readonly_fields = (
+        "created_at",
+        "created_by",
+        "raffle",
+        "ticket_price",
+        "product_cost",
+        "shipping_cost",
+        "advertising_cost",
+        "other_costs",
+        "desired_margin_percent",
+        "offer_buy_quantity",
+        "offer_bonus_quantity",
+        "offer_min_paid_quantity",
+        "total_cost",
+        "revenue_needed",
+        "break_even_tickets",
+        "paid_tickets_needed",
+        "bonus_tickets",
+        "total_issued",
+        "expected_revenue",
+        "expected_profit",
+        "max_tickets",
+    )
+    fields = readonly_fields
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 class UserSecurityInline(admin.StackedInline):

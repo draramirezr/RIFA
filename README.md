@@ -97,6 +97,9 @@ DEFAULT_FROM_EMAIL=GanaHoyRD <no-reply@ganahoyrd.com>
 
 # (Opcional) logs si falla el envío
 EMAIL_LOG_ERRORS=1
+
+# URL pública del sitio (para links dentro del correo)
+SITE_URL=https://www.ganahoyrd.com
 ```
 
 Notas:

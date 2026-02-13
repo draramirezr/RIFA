@@ -159,9 +159,10 @@ def admin_raffle_calculator(request):
             product_cost = int(form.cleaned_data["product_cost"] or 0)
             shipping_cost = int(form.cleaned_data["shipping_cost"] or 0)
             advertising_cost = int(form.cleaned_data["advertising_cost"] or 0)
+            other_costs = int(form.cleaned_data["other_costs"] or 0)
             margin_pct: Decimal = form.cleaned_data["desired_margin_percent"] or Decimal("0")
 
-            total_cost = product_cost + shipping_cost + advertising_cost
+            total_cost = product_cost + shipping_cost + advertising_cost + other_costs
             multiplier = Decimal("1") + (Decimal(margin_pct) / Decimal("100"))
             revenue_needed = (Decimal(total_cost) * multiplier).to_integral_value(rounding=ROUND_CEILING)
             revenue_needed_int = int(revenue_needed)
@@ -202,6 +203,7 @@ def admin_raffle_calculator(request):
                 "raffle": raffle,
                 "price": price,
                 "total_cost": total_cost,
+                "other_costs": other_costs,
                 "margin_pct": margin_pct,
                 "revenue_needed": revenue_needed_int,
                 "break_even_tickets": break_even_tickets,
@@ -216,6 +218,40 @@ def admin_raffle_calculator(request):
                 "max_paid_possible": max_paid_possible,
                 "max_revenue_possible": max_revenue_possible,
             }
+
+            # Save calculation if requested
+            if request.POST.get("save") == "1":
+                try:
+                    from django.urls import reverse
+
+                    from .models import RaffleCalculation
+
+                    calc = RaffleCalculation.objects.create(
+                        raffle=raffle,
+                        created_by=request.user if request.user.is_authenticated else None,
+                        ticket_price=price,
+                        product_cost=product_cost,
+                        shipping_cost=shipping_cost,
+                        advertising_cost=advertising_cost,
+                        other_costs=other_costs,
+                        desired_margin_percent=margin_pct,
+                        total_cost=total_cost,
+                        revenue_needed=revenue_needed_int,
+                        break_even_tickets=break_even_tickets,
+                        paid_tickets_needed=tickets_needed,
+                        bonus_tickets=bonus_tickets,
+                        total_issued=total_issued,
+                        expected_revenue=expected_revenue,
+                        expected_profit=expected_profit,
+                        max_tickets=max_tickets,
+                        offer_buy_quantity=int(getattr(offer, "buy_quantity", 0) or 0),
+                        offer_bonus_quantity=int(getattr(offer, "bonus_quantity", 0) or 0),
+                        offer_min_paid_quantity=int(getattr(offer, "min_paid_quantity", 0) or 0),
+                    )
+                    messages.success(request, "Cálculo guardado.")
+                    return redirect(reverse("admin:rifas_rafflecalculation_change", args=[calc.id]))
+                except Exception:
+                    messages.warning(request, "No se pudo guardar el cálculo (intenta de nuevo).")
 
     ctx.update({"title": "Calculadora de boletos", "form": form, "result": result})
     return render(request, "admin/raffle_calculator.html", ctx)

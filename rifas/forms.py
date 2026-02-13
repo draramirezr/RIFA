@@ -365,6 +365,7 @@ class AdminRaffleCalculatorForm(forms.Form):
     product_cost = forms.IntegerField(min_value=0, label="Costo del producto (RD$)", initial=0)
     shipping_cost = forms.IntegerField(min_value=0, label="Envío (RD$)", initial=0)
     advertising_cost = forms.IntegerField(min_value=0, label="Publicidad (RD$)", initial=0)
+    other_costs = forms.IntegerField(min_value=0, label="Otros gastos (RD$)", initial=0)
     desired_margin_percent = forms.DecimalField(
         min_value=0,
         max_digits=6,
@@ -387,9 +388,9 @@ class AdminRaffleCalculatorForm(forms.Form):
         )
 
         self.fields["raffle"].widget.attrs.setdefault("class", base_select)
-        for k in ("product_cost", "shipping_cost", "advertising_cost", "desired_margin_percent"):
+        for k in ("product_cost", "shipping_cost", "advertising_cost", "other_costs", "desired_margin_percent"):
             self.fields[k].widget.attrs.setdefault("class", base_input)
-        for k in ("product_cost", "shipping_cost", "advertising_cost"):
+        for k in ("product_cost", "shipping_cost", "advertising_cost", "other_costs"):
             self.fields[k].widget.attrs.setdefault("inputmode", "numeric")
             self.fields[k].widget.attrs.setdefault("pattern", "[0-9]*")
 

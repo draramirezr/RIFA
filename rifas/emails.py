@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from email.utils import parseaddr
 import mimetypes
 import threading
 import base64
@@ -9,13 +10,71 @@ import urllib.request
 import urllib.error
 
 from django.conf import settings
-from django.core.mail import EmailMessage
+from django.core.mail import EmailMessage, EmailMultiAlternatives
 from django.utils import timezone
 
 from .models import TicketPurchase
 
 
 logger = logging.getLogger(__name__)
+
+
+def _split_name_email(value: str) -> tuple[str, str]:
+    """
+    Accepts either:
+    - "Name <email@x.com>"
+    - "email@x.com"
+    Returns (name, email).
+    """
+    name, email = parseaddr((value or "").strip())
+    return (name or "").strip(), (email or "").strip()
+
+
+def _make_html_email(*, subject: str, to: list[str], text: str, html: str, from_email: str | None = None) -> EmailMultiAlternatives:
+    msg = EmailMultiAlternatives(subject=subject, body=text, to=to, from_email=from_email)
+    msg.attach_alternative(html, "text/html")
+    return msg
+
+
+def _email_shell(*, title: str, lead: str, body_html: str, cta_text: str | None = None, cta_url: str | None = None) -> str:
+    """
+    Minimal, modern HTML shell with inline styles (email-client friendly).
+    """
+    safe_cta = ""
+    if cta_text and cta_url:
+        safe_cta = f"""
+          <div style="margin-top:18px;">
+            <a href="{cta_url}" style="display:inline-block;background:#10B981;color:#061017;text-decoration:none;font-weight:700;padding:12px 16px;border-radius:12px;">
+              {cta_text}
+            </a>
+          </div>
+        """
+    return f"""<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#0b1020;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;">
+    <div style="max-width:600px;margin:0 auto;padding:20px;">
+      <div style="background:#0f172a;border:1px solid rgba(255,255,255,.08);border-radius:18px;overflow:hidden;">
+        <div style="padding:18px 18px 14px;background:linear-gradient(90deg,#10B981,#059669);color:#061017;">
+          <div style="font-size:14px;font-weight:800;letter-spacing:.5px;">GanaHoyRD</div>
+          <div style="font-size:20px;font-weight:900;margin-top:2px;">{title}</div>
+        </div>
+        <div style="padding:18px;color:#e5e7eb;">
+          <div style="font-size:14px;line-height:1.55;color:#cbd5e1;">{lead}</div>
+          <div style="margin-top:14px;font-size:14px;line-height:1.65;">
+            {body_html}
+          </div>
+          {safe_cta}
+          <div style="margin-top:18px;border-top:1px solid rgba(255,255,255,.08);padding-top:12px;font-size:12px;color:#94a3b8;">
+            Si no solicitaste esto, puedes ignorar este correo.
+          </div>
+        </div>
+      </div>
+      <div style="text-align:center;margin-top:14px;font-size:12px;color:#64748b;">
+        © {timezone.now().year} GanaHoyRD
+      </div>
+    </div>
+  </body>
+</html>"""
 
 
 def _send_via_sendgrid_api(email: EmailMessage) -> None:
@@ -27,17 +86,41 @@ def _send_via_sendgrid_api(email: EmailMessage) -> None:
     if not api_key:
         raise RuntimeError("Missing SENDGRID_API_KEY")
 
-    from_email = (getattr(email, "from_email", "") or "").strip() or (getattr(settings, "DEFAULT_FROM_EMAIL", "") or "")
-    to_emails = list(getattr(email, "to", []) or [])
+    from_raw = (getattr(email, "from_email", "") or "").strip() or (getattr(settings, "DEFAULT_FROM_EMAIL", "") or "")
+    from_name, from_email = _split_name_email(from_raw)
+    if not from_email:
+        raise RuntimeError("Missing from_email")
+
+    to_raw = list(getattr(email, "to", []) or [])
+    to_emails: list[str] = []
+    for v in to_raw:
+        _n, em = _split_name_email(str(v))
+        if em:
+            to_emails.append(em)
     if not to_emails:
         return
 
     payload: dict = {
         "personalizations": [{"to": [{"email": e} for e in to_emails]}],
-        "from": {"email": from_email},
+        "from": {"email": from_email, **({"name": from_name} if from_name else {})},
         "subject": getattr(email, "subject", "") or "",
-        "content": [{"type": "text/plain", "value": getattr(email, "body", "") or ""}],
     }
+
+    # Content: include plain + html if available (EmailMultiAlternatives).
+    contents: list[dict] = []
+    plain = getattr(email, "body", "") or ""
+    if plain:
+        contents.append({"type": "text/plain", "value": plain})
+    for alt in getattr(email, "alternatives", []) or []:
+        try:
+            content, mimetype = alt
+        except Exception:
+            continue
+        if mimetype == "text/html" and content:
+            contents.append({"type": "text/html", "value": content})
+    if not contents:
+        contents = [{"type": "text/plain", "value": ""}]
+    payload["content"] = contents
 
     attachments = []
     for att in getattr(email, "attachments", []) or []:
@@ -170,7 +253,25 @@ def send_purchase_notification(*, request, purchase: TicketPurchase) -> None:
 
     body = "\n".join(lines) + "\n"
 
-    email = EmailMessage(subject=subject, body=body, to=[to_email])
+    html = _email_shell(
+        title="Nueva compra pendiente",
+        lead="Se registró una compra pendiente de aprobación.",
+        body_html="<br>".join(
+            [
+                f"<b>Rifa:</b> {raffle.title}",
+                f"<b>Código:</b> {purchase.public_reference}",
+                f"<b>Nombre:</b> {purchase.full_name}",
+                f"<b>Teléfono:</b> {purchase.phone}",
+                f"<b>Email:</b> {purchase.email or '-'}",
+                f"<b>Cantidad:</b> {purchase.quantity}",
+                f"<b>Total:</b> RD$ {purchase.total_amount}",
+                (f"<b>Comprobante:</b> <a style='color:#a7f3d0' href='{proof_url}'>Ver</a>" if proof_url else ""),
+            ]
+        ),
+        cta_text="Ver en el admin",
+        cta_url=(request.build_absolute_uri("/admin/") if request else None),
+    )
+    email = _make_html_email(subject=subject, to=[to_email], text=body, html=html)
 
     _safe_attach_image(email, purchase)
 
@@ -203,7 +304,23 @@ def send_customer_purchase_received(*, purchase: TicketPurchase) -> None:
             "— GanaHoyRD",
         ]
     )
-    _send_async(EmailMessage(subject=subject, body=body, to=[to_email]))
+    site_url = (getattr(settings, "SITE_URL", "") or "").rstrip("/")
+    html = _email_shell(
+        title="Recibimos tu compra",
+        lead="Gracias por participar. Tu compra quedó en estado pendiente mientras verificamos el comprobante.",
+        body_html="<br>".join(
+            [
+                f"<b>Rifa:</b> {purchase.raffle.title}",
+                f"<b>Código:</b> {purchase.public_reference}",
+                f"<b>Boletos pagados:</b> {purchase.quantity}",
+                f"<b>Total:</b> RD$ {purchase.total_amount}",
+                "<br><b>Estado:</b> PENDIENTE",
+            ]
+        ),
+        cta_text="Ver Mis boletos",
+        cta_url=(f"{site_url}/mis-boletos/" if site_url else None),
+    )
+    _send_async(_make_html_email(subject=subject, to=[to_email], text=body, html=html))
 
 
 def send_customer_purchase_status(*, purchase: TicketPurchase) -> None:
@@ -262,5 +379,80 @@ def send_customer_purchase_status(*, purchase: TicketPurchase) -> None:
         lines += ["", f"Estado: {status}"]
 
     lines += ["", "— GanaHoyRD"]
-    _send_async(EmailMessage(subject=subject, body="\n".join(lines), to=[to_email]))
+    body_text = "\n".join(lines)
+    site_url = (getattr(settings, "SITE_URL", "") or "").rstrip("/")
+
+    if status == TicketPurchase.Status.APPROVED:
+        body_html = "<br>".join(
+            [
+                f"<b>Rifa:</b> {raffle.title}",
+                f"<b>Código:</b> {purchase.public_reference}",
+                "<br><b>Estado:</b> APROBADA",
+                f"<b>Boletos pagados:</b> {purchase.quantity}",
+                f"<b>Boletos gratis:</b> {purchase.bonus_quantity}",
+                f"<b>Total boletos:</b> {purchase.total_tickets}",
+            ]
+        )
+    elif status == TicketPurchase.Status.REJECTED:
+        notes = (purchase.admin_notes or "").strip()
+        body_html = "<br>".join(
+            [
+                f"<b>Rifa:</b> {raffle.title}",
+                f"<b>Código:</b> {purchase.public_reference}",
+                "<br><b>Estado:</b> RECHAZADA",
+                (f"<br><b>Motivo:</b> {notes}" if notes else ""),
+            ]
+        )
+    else:
+        body_html = "<br>".join([f"<b>Rifa:</b> {raffle.title}", f"<b>Código:</b> {purchase.public_reference}", f"<br><b>Estado:</b> {status}"])
+
+    html = _email_shell(
+        title="Actualización de tu compra",
+        lead="Te informamos el estado de tu compra.",
+        body_html=body_html,
+        cta_text="Ver Mis boletos",
+        cta_url=(f"{site_url}/mis-boletos/" if site_url else None),
+    )
+    _send_async(_make_html_email(subject=subject, to=[to_email], text=body_text, html=html))
+
+
+def send_winner_notification(*, raffle, purchase, ticket_display: str, site_url: str | None = None) -> None:
+    """
+    Email to the winner when raffle winner ticket is assigned in admin.
+    """
+    if not _should_send_customer_emails():
+        return
+    to_email = (getattr(purchase, "email", "") or "").strip()
+    if not to_email:
+        return
+
+    subject = f"¡Felicidades! Ganaste la rifa - {getattr(raffle, 'title', '')}"
+    text = "\n".join(
+        [
+            "¡Felicidades!",
+            "",
+            "Has resultado ganador(a) en GanaHoyRD.",
+            f"Rifa: {getattr(raffle, 'title', '')}",
+            f"Boleto ganador: #{ticket_display}",
+            "",
+            "Nos pondremos en contacto contigo para coordinar la entrega.",
+            "— GanaHoyRD",
+        ]
+    )
+    base = (site_url or getattr(settings, "SITE_URL", "") or "").strip().rstrip("/")
+    raffle_url = f"{base}/rifa/{getattr(raffle, 'slug', '')}/" if base else None
+    html = _email_shell(
+        title="¡Felicidades! Eres el ganador(a)",
+        lead="Premios reales y ganadores reales. Gracias por participar.",
+        body_html="<br>".join(
+            [
+                f"<b>Rifa:</b> {getattr(raffle, 'title', '')}",
+                f"<b>Boleto ganador:</b> #{ticket_display}",
+                "<br>Nos pondremos en contacto contigo para coordinar la entrega.",
+            ]
+        ),
+        cta_text="Ver la rifa",
+        cta_url=raffle_url,
+    )
+    _send_async(_make_html_email(subject=subject, to=[to_email], text=text, html=html))
 

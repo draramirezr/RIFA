@@ -45,6 +45,14 @@
 
           <div class="form-row">
             <div>
+              <label for="{{ form.other_costs.id_for_label }}">{{ form.other_costs.label }}</label>
+              <div class="fieldBox">{{ form.other_costs }}</div>
+              {% if form.other_costs.errors %}{{ form.other_costs.errors }}{% endif %}
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div>
               <label for="{{ form.desired_margin_percent.id_for_label }}">{{ form.desired_margin_percent.label }}</label>
               <div class="fieldBox">{{ form.desired_margin_percent }}</div>
               {% if form.desired_margin_percent.help_text %}<div class="help">{{ form.desired_margin_percent.help_text }}</div>{% endif %}
@@ -55,6 +63,9 @@
 
         <div class="submit-row">
           <input type="submit" value="{% translate 'Calcular' %}" class="default">
+          <button type="submit" name="save" value="1" class="button" style="margin-left:8px;">
+            {% translate "Guardar cálculo" %}
+          </button>
         </div>
       </form>
     </div>

@@ -719,6 +719,132 @@ class Ticket(models.Model):
         return str(self.number)
 
 
+class AuditEvent(models.Model):
+    """
+    Simple audit trail for admin actions on purchases/tickets.
+    """
+
+    class Action(models.TextChoices):
+        PURCHASE_APPROVED = "purchase_approved", "Compra aprobada"
+        PURCHASE_REJECTED = "purchase_rejected", "Compra rechazada"
+        PURCHASE_DELETED = "purchase_deleted", "Compra eliminada"
+        TICKET_DELETED = "ticket_deleted", "Boleto eliminado"
+        WINNER_SET = "winner_set", "Ganador asignado"
+
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="audit_events",
+        verbose_name="Usuario",
+    )
+    action = models.CharField(max_length=40, choices=Action.choices, db_index=True)
+
+    raffle = models.ForeignKey(
+        "Raffle",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="audit_events",
+        verbose_name="Rifa",
+    )
+    purchase = models.ForeignKey(
+        "TicketPurchase",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="audit_events",
+        verbose_name="Compra",
+    )
+    ticket = models.ForeignKey(
+        "Ticket",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="audit_events",
+        verbose_name="Boleto",
+    )
+
+    from_status = models.CharField(max_length=20, blank=True, verbose_name="Estado anterior")
+    to_status = models.CharField(max_length=20, blank=True, verbose_name="Estado nuevo")
+    notes = models.TextField(blank=True, verbose_name="Notas")
+    extra = models.JSONField(default=dict, blank=True, verbose_name="Extra")
+
+    ip = models.CharField(max_length=64, blank=True)
+    user_agent = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        verbose_name = "Auditoría"
+        verbose_name_plural = "Auditoría"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["action", "created_at"], name="idx_audit_action_created"),
+            models.Index(fields=["raffle", "created_at"], name="idx_audit_raffle_created"),
+            models.Index(fields=["purchase", "created_at"], name="idx_audit_purchase_created"),
+        ]
+
+    def __str__(self) -> str:
+        who = getattr(self.actor, "username", None) or "—"
+        return f"{self.get_action_display()} - {who} ({self.created_at:%Y-%m-%d %H:%M})"
+
+
+class RaffleCalculation(models.Model):
+    """
+    Saved calculations from the admin raffle calculator.
+    Stores inputs and computed outputs for later reference.
+    """
+
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="raffle_calculations",
+        verbose_name="Usuario",
+    )
+    raffle = models.ForeignKey(Raffle, on_delete=models.CASCADE, related_name="calculations", verbose_name="Rifa")
+
+    # Snapshot inputs
+    ticket_price = models.PositiveIntegerField(verbose_name="Precio por boleto")
+    product_cost = models.PositiveIntegerField(default=0, verbose_name="Costo del producto")
+    shipping_cost = models.PositiveIntegerField(default=0, verbose_name="Envío")
+    advertising_cost = models.PositiveIntegerField(default=0, verbose_name="Publicidad")
+    other_costs = models.PositiveIntegerField(default=0, verbose_name="Otros gastos")
+    desired_margin_percent = models.DecimalField(max_digits=6, decimal_places=2, default=0, verbose_name="Margen deseado (%)")
+
+    # Offer snapshot (if any)
+    offer_buy_quantity = models.PositiveIntegerField(default=0, verbose_name="Oferta compra N")
+    offer_bonus_quantity = models.PositiveIntegerField(default=0, verbose_name="Oferta gratis M")
+    offer_min_paid_quantity = models.PositiveIntegerField(default=0, verbose_name="Oferta mínimo pagados")
+
+    # Outputs
+    total_cost = models.PositiveIntegerField(default=0, verbose_name="Costos totales")
+    revenue_needed = models.PositiveIntegerField(default=0, verbose_name="Ingresos meta")
+    break_even_tickets = models.PositiveIntegerField(default=0, verbose_name="Boletos punto de equilibrio")
+    paid_tickets_needed = models.PositiveIntegerField(default=0, verbose_name="Boletos pagados sugeridos")
+    bonus_tickets = models.PositiveIntegerField(default=0, verbose_name="Boletos gratis")
+    total_issued = models.PositiveIntegerField(default=0, verbose_name="Total emitidos")
+    expected_revenue = models.PositiveIntegerField(default=0, verbose_name="Ingresos estimados")
+    expected_profit = models.IntegerField(default=0, verbose_name="Ganancia estimada")
+    max_tickets = models.PositiveIntegerField(default=0, verbose_name="Máximo boletos (rifa)")
+
+    class Meta:
+        verbose_name = "Cálculo de rifa"
+        verbose_name_plural = "Cálculos de rifas"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["raffle", "created_at"], name="idx_calc_raffle_created"),
+            models.Index(fields=["created_by", "created_at"], name="idx_calc_user_created"),
+        ]
+
+    def __str__(self) -> str:
+        who = getattr(self.created_by, "username", None) or "—"
+        return f"Cálculo {self.raffle.title} ({who})"
+
+
 class RaffleImage(models.Model):
     raffle = models.ForeignKey(Raffle, on_delete=models.CASCADE, related_name="images")
     image = models.ImageField(
