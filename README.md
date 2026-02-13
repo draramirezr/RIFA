@@ -155,3 +155,71 @@ SERVE_PUBLIC_MEDIA=1
 Railway tiene filesystem efímero. Para que las imágenes subidas no se pierdan, monta un **Volume** en:
 - `MEDIA_ROOT` → `/app/media`
 
+## Backups y recuperación (recomendado)
+
+### Backup (genera archivo en el Volume)
+
+Esto crea un backup comprimido en `MEDIA_ROOT/backups` (en Railway: `/app/media/backups`):
+
+```powershell
+py manage.py backup_data
+```
+
+Puedes ajustar retención:
+
+```powershell
+py manage.py backup_data --retention-days 14
+```
+
+Variables (Railway):
+
+```text
+BACKUP_RETENTION_DAYS=14
+```
+
+### Restaurar (solo en emergencias)
+
+Restaurar un backup (cargará fixtures con `loaddata`):
+
+```powershell
+py manage.py restore_data "media/backups/ganahoyrd-backup-YYYYMMDD-HHMMSS.json.gz"
+```
+
+Opcional (PELIGROSO) para restaurar en limpio:
+
+```powershell
+py manage.py restore_data "media/backups/..." --flush
+```
+
+### Programar automático (Railway)
+
+Crea un **Cron/Job diario** que ejecute:
+
+```bash
+python manage.py backup_data
+```
+
+### Backup MySQL (mysqldump) — recomendado en producción
+
+Si estás usando `DB_ENGINE=mysql`, el backup ideal es con `mysqldump`:
+
+```powershell
+py manage.py backup_mysql
+```
+
+Esto crea: `MEDIA_ROOT/backups/ganahoyrd-mysql-YYYYMMDD-HHMMSS.sql.gz`
+
+Restaurar (PELIGROSO):
+
+```powershell
+py manage.py restore_mysql "media/backups/ganahoyrd-mysql-YYYYMMDD-HHMMSS.sql.gz"
+```
+
+#### Railway: instalar mysql client (para mysqldump/mysql)
+
+Si tu container no trae `mysqldump`, instala el paquete `default-mysql-client` (Railpack/apt).
+Luego programa el Cron con:
+
+```bash
+python manage.py backup_mysql
+```
