@@ -118,6 +118,115 @@
           }
         }
 
+        // Change list: collapse filters by default (user can expand)
+        if (document.body.classList.contains("change-list")) {
+          const filter = document.getElementById("changelist-filter");
+          if (filter) {
+            const key = "admin_filters_collapsed";
+            const stored = localStorage.getItem(key);
+            const initialCollapsed = stored === null ? true : stored === "1";
+
+            // Wrap current content so we can hide/show
+            let body = filter.querySelector(":scope > .gh-filter-body");
+            if (!body) {
+              body = document.createElement("div");
+              body.className = "gh-filter-body";
+              const toMove = [];
+              Array.from(filter.children).forEach((ch) => {
+                // keep the title if present
+                if (ch.tagName && ch.tagName.toLowerCase() === "h2") return;
+                toMove.push(ch);
+              });
+              toMove.forEach((ch) => body.appendChild(ch));
+              filter.appendChild(body);
+            }
+
+            let h2 = filter.querySelector("h2");
+            if (!h2) {
+              h2 = document.createElement("h2");
+              h2.textContent = "{% translate 'Filtros' %}";
+              filter.insertBefore(h2, filter.firstChild);
+            }
+
+            let btn = filter.querySelector(".gh-filter-toggle");
+            if (!btn) {
+              btn = document.createElement("button");
+              btn.type = "button";
+              btn.className = "button gh-filter-toggle";
+              btn.style.float = "right";
+              btn.style.fontSize = "12px";
+              btn.style.padding = "2px 8px";
+              btn.style.lineHeight = "1.8";
+              btn.style.marginTop = "-2px";
+              h2.appendChild(btn);
+            }
+
+            function setCollapsed(collapsed) {
+              filter.classList.toggle("is-collapsed", collapsed);
+              localStorage.setItem(key, collapsed ? "1" : "0");
+              btn.textContent = collapsed ? "{% translate 'Mostrar' %}" : "{% translate 'Ocultar' %}";
+            }
+
+            btn.addEventListener("click", () => setCollapsed(!filter.classList.contains("is-collapsed")));
+            setCollapsed(initialCollapsed);
+
+            // Collapse each filter group (h3 + its items) by default.
+            try {
+              const groups = Array.from(filter.querySelectorAll("h3"));
+              const pageKey = location.pathname || "changelist";
+              groups.forEach((h3, idx) => {
+                const title = (h3.textContent || "").trim().replace(/\s+/g, " ").slice(0, 80) || String(idx);
+                const gKey = `admin_filter_group_collapsed:${pageKey}:${idx}:${title}`;
+                const gStored = localStorage.getItem(gKey);
+                const gInitialCollapsed = gStored === null ? true : gStored === "1";
+
+                // Wrap everything after h3 until next h3
+                let body = h3.nextElementSibling;
+                if (!body || body.classList.contains("gh-filter-group-body")) {
+                  // already wrapped or unexpected structure
+                  return;
+                }
+                const wrap = document.createElement("div");
+                wrap.className = "gh-filter-group-body";
+                const toMove = [];
+                let cur = h3.nextElementSibling;
+                while (cur && cur.tagName && cur.tagName.toLowerCase() !== "h3") {
+                  const next = cur.nextElementSibling;
+                  toMove.push(cur);
+                  cur = next;
+                }
+                toMove.forEach((n) => wrap.appendChild(n));
+                h3.insertAdjacentElement("afterend", wrap);
+
+                let gBtn = h3.querySelector(".gh-filter-group-toggle");
+                if (!gBtn) {
+                  gBtn = document.createElement("button");
+                  gBtn.type = "button";
+                  gBtn.className = "button gh-filter-group-toggle";
+                  gBtn.style.float = "right";
+                  gBtn.style.fontSize = "11px";
+                  gBtn.style.padding = "1px 8px";
+                  gBtn.style.lineHeight = "1.8";
+                  gBtn.style.marginTop = "-2px";
+                  h3.appendChild(gBtn);
+                }
+
+                function setGroupCollapsed(collapsed) {
+                  h3.classList.toggle("is-collapsed", collapsed);
+                  wrap.classList.toggle("is-collapsed", collapsed);
+                  localStorage.setItem(gKey, collapsed ? "1" : "0");
+                  gBtn.textContent = collapsed ? "{% translate 'Mostrar' %}" : "{% translate 'Ocultar' %}";
+                }
+
+                gBtn.addEventListener("click", () => setGroupCollapsed(!wrap.classList.contains("is-collapsed")));
+                setGroupCollapsed(gInitialCollapsed);
+              });
+            } catch (e) {
+              // ignore
+            }
+          }
+        }
+
         // Login: show/hide password
         if (!document.body.classList.contains("login")) return;
 

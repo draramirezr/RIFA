@@ -136,3 +136,16 @@ tr:hover th {
   }
 }
 
+/* Filters collapsed state (all screens) */
+#changelist-filter.is-collapsed .gh-filter-body {
+  display: none;
+}
+
+/* Filter groups collapsed */
+#changelist-filter h3.is-collapsed {
+  opacity: 0.95;
+}
+
+#changelist-filter .gh-filter-group-body.is-collapsed {
+  display: none;
+}
