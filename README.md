@@ -90,13 +90,18 @@ SEND_CUSTOMER_EMAILS=1
 # A dónde llega la notificación interna (admin)
 PURCHASE_NOTIFY_EMAIL=tu-correo@dominio.com
 
-# SendGrid SMTP
+# SendGrid (recomendado: Web API)
 SENDGRID_API_KEY=SG.xxxxxxxxxxxxxxxxxxxxxxxxx
+SENDGRID_USE_API=1
 DEFAULT_FROM_EMAIL=GanaHoyRD <no-reply@ganahoyrd.com>
+
+# (Opcional) logs si falla el envío
+EMAIL_LOG_ERRORS=1
 ```
 
 Notas:
-- `SENDGRID_API_KEY` se usa como password SMTP automáticamente.
+- Con `SENDGRID_USE_API=1` se envía por HTTPS (más confiable si el hosting bloquea SMTP).
+- Si no activas `SENDGRID_USE_API`, `SENDGRID_API_KEY` se usa como password SMTP automáticamente.
 - El `DEFAULT_FROM_EMAIL` debe ser un remitente verificado en SendGrid (Single Sender o dominio).
 
 ## Tailwind (sin CDN, listo para producción)

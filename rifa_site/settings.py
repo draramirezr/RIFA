@@ -285,6 +285,9 @@ SERVE_PUBLIC_MEDIA = os.environ.get("SERVE_PUBLIC_MEDIA", "0") == "1"
 # Dev default: prints emails in terminal (no SMTP required)
 _env_email_backend = (os.environ.get("EMAIL_BACKEND", "") or "").strip()
 SENDGRID_API_KEY = (os.environ.get("SENDGRID_API_KEY", "") or "").strip()
+SENDGRID_USE_API = os.environ.get("SENDGRID_USE_API", "0") == "1"
+SENDGRID_API_TIMEOUT = int(os.environ.get("SENDGRID_API_TIMEOUT", "10"))
+EMAIL_LOG_ERRORS = os.environ.get("EMAIL_LOG_ERRORS", "0") == "1"
 
 if _env_email_backend:
     EMAIL_BACKEND = _env_email_backend

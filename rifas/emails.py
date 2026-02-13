@@ -2,12 +2,90 @@ from __future__ import annotations
 
 import mimetypes
 import threading
+import base64
+import json
+import logging
+import urllib.request
+import urllib.error
 
 from django.conf import settings
 from django.core.mail import EmailMessage
 from django.utils import timezone
 
 from .models import TicketPurchase
+
+
+logger = logging.getLogger(__name__)
+
+
+def _send_via_sendgrid_api(email: EmailMessage) -> None:
+    """
+    Send email through SendGrid Web API (HTTPS). Useful when SMTP is blocked.
+    Requires SENDGRID_API_KEY and SENDGRID_USE_API=1.
+    """
+    api_key = (getattr(settings, "SENDGRID_API_KEY", "") or "").strip()
+    if not api_key:
+        raise RuntimeError("Missing SENDGRID_API_KEY")
+
+    from_email = (getattr(email, "from_email", "") or "").strip() or (getattr(settings, "DEFAULT_FROM_EMAIL", "") or "")
+    to_emails = list(getattr(email, "to", []) or [])
+    if not to_emails:
+        return
+
+    payload: dict = {
+        "personalizations": [{"to": [{"email": e} for e in to_emails]}],
+        "from": {"email": from_email},
+        "subject": getattr(email, "subject", "") or "",
+        "content": [{"type": "text/plain", "value": getattr(email, "body", "") or ""}],
+    }
+
+    attachments = []
+    for att in getattr(email, "attachments", []) or []:
+        # Django stores as (filename, content, mimetype)
+        try:
+            filename, content, mimetype = att
+        except Exception:
+            continue
+        if not filename or content is None:
+            continue
+        if isinstance(content, str):
+            content_bytes = content.encode("utf-8")
+        else:
+            content_bytes = content
+        attachments.append(
+            {
+                "content": base64.b64encode(content_bytes).decode("ascii"),
+                "type": mimetype or "application/octet-stream",
+                "filename": filename,
+                "disposition": "attachment",
+            }
+        )
+    if attachments:
+        payload["attachments"] = attachments
+
+    data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        "https://api.sendgrid.com/v3/mail/send",
+        data=data,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    timeout = int(getattr(settings, "SENDGRID_API_TIMEOUT", 10) or 10)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            # 202 Accepted is success.
+            if int(getattr(resp, "status", 0) or 0) not in (200, 202):
+                raise RuntimeError(f"SendGrid API unexpected status: {getattr(resp,'status',None)}")
+    except urllib.error.HTTPError as e:
+        body = ""
+        try:
+            body = e.read().decode("utf-8", "ignore")
+        except Exception:
+            body = ""
+        raise RuntimeError(f"SendGrid API HTTPError {e.code}: {body}") from e
 
 
 def _send_async(email: EmailMessage) -> None:
@@ -18,8 +96,13 @@ def _send_async(email: EmailMessage) -> None:
 
     def _runner():
         try:
-            email.send(fail_silently=True)
-        except Exception:
+            if getattr(settings, "SENDGRID_USE_API", False) and getattr(settings, "SENDGRID_API_KEY", ""):
+                _send_via_sendgrid_api(email)
+            else:
+                email.send(fail_silently=True)
+        except Exception as e:
+            if getattr(settings, "EMAIL_LOG_ERRORS", False):
+                logger.warning("Email send failed: %s", e, exc_info=True)
             return
 
     t = threading.Thread(target=_runner, daemon=True)
