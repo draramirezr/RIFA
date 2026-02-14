@@ -223,7 +223,8 @@ def _safe_attach_image(email: EmailMessage, purchase: TicketPurchase) -> None:
         f = purchase.proof_image
         if not f or not getattr(f, "name", ""):
             return
-        if getattr(f, "size", 0) and f.size > 6 * 1024 * 1024:
+        # Keep attachments small so sending is fast (SendGrid API base64 grows size).
+        if getattr(f, "size", 0) and f.size > 1024 * 1024:
             return
         f.open("rb")
         mimetype, _enc = mimetypes.guess_type(f.name)
@@ -363,9 +364,9 @@ def send_customer_purchase_status(*, purchase: TicketPurchase) -> None:
         f"Código de compra: {purchase.public_reference}",
     ]
 
+    nums: list[str] = []
     if status == TicketPurchase.Status.APPROVED:
         # Ticket numbers are created when approved.
-        nums = []
         try:
             for t in purchase.tickets.order_by("number").all()[:200]:
                 nums.append(getattr(t, "display_number", str(t.number)))
@@ -402,6 +403,19 @@ def send_customer_purchase_status(*, purchase: TicketPurchase) -> None:
     site_url = (getattr(settings, "SITE_URL", "") or "").rstrip("/")
 
     if status == TicketPurchase.Status.APPROVED:
+        nums_html = ""
+        if nums:
+            shown = ", ".join(nums) + ("" if len(nums) < 200 else " ...")
+            nums_html = (
+                "<br><br>"
+                "<div style='padding:12px 14px;border-radius:14px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.10)'>"
+                "<b>Tus números de boletos:</b><br>"
+                f"<span style='font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;color:#e5e7eb'>{shown}</span>"
+                "<div style='margin-top:8px;font-size:12px;color:#94a3b8'>"
+                "Si no ves todos tus números aquí, entra a “Mis boletos” para ver la lista completa."
+                "</div>"
+                "</div>"
+            )
         body_html = "<br>".join(
             [
                 f"<b>Rifa:</b> {raffle.title}",
@@ -411,7 +425,7 @@ def send_customer_purchase_status(*, purchase: TicketPurchase) -> None:
                 f"<b>Boletos gratis:</b> {purchase.bonus_quantity}",
                 f"<b>Total boletos:</b> {purchase.total_tickets}",
             ]
-        )
+        ) + nums_html
     elif status == TicketPurchase.Status.REJECTED:
         notes = (purchase.admin_notes or "").strip()
         body_html = "<br>".join(

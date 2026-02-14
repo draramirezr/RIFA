@@ -201,9 +201,11 @@ class TicketPurchaseForm(forms.ModelForm):
         f = self.cleaned_data.get("proof_image")
         if not f:
             return f
-        # Transparente: si supera 6MB, optimizamos internamente.
-        if getattr(f, "size", 0) > 6 * 1024 * 1024:
-            return _optimize_image_upload(f, target_max_bytes=6 * 1024 * 1024)
+        # Transparente: optimizamos el comprobante para que pese poco y
+        # los correos (y el almacenamiento) sean rápidos.
+        target_max_bytes = 900 * 1024  # ~900KB
+        if getattr(f, "size", 0) > target_max_bytes:
+            return _optimize_image_upload(f, target_max_bytes=target_max_bytes)
         return f
 
     def clean_full_name(self):
