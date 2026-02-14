@@ -531,3 +531,55 @@ def send_winner_notification_sync(*, raffle, purchase, ticket_display: str, site
     email = _make_html_email(subject=subject, to=[to_email], text=text, html=html)
     return _send_now(email)
 
+
+def send_admin_temporary_password(*, to_email: str, username: str, temp_password: str, site_url: str | None = None) -> tuple[bool, str]:
+    """
+    Admin password recovery email (temporary password).
+    Uses SendGrid API when configured.
+    Returns (ok, error_message).
+    """
+    to_email = (to_email or "").strip()
+    if not to_email:
+        return False, "Missing to_email"
+
+    base = (site_url or getattr(settings, "SITE_URL", "") or "").strip().rstrip("/")
+    admin_url = f"{base}/admin/" if base else None
+
+    subject = "Recuperación de contraseña (Admin) - GanaHoyRD"
+    text = "\n".join(
+        [
+            "Se solicitó recuperación de contraseña para el panel administrador.",
+            "",
+            f"Usuario: {username}",
+            f"Contraseña temporal: {temp_password}",
+            "",
+            "Instrucciones:",
+            "- Entra a /admin/ con esta contraseña temporal.",
+            "- El sistema te obligará a cambiarla inmediatamente.",
+            "- Si tú no solicitaste esto, contacta al administrador.",
+            "",
+            "— GanaHoyRD",
+        ]
+    )
+    html = _email_shell(
+        title="Recuperación de contraseña (Admin)",
+        lead="Recibimos una solicitud para recuperar tu acceso al panel.",
+        body_html="<br>".join(
+            [
+                f"<b>Usuario:</b> {username}",
+                "<br><b>Contraseña temporal:</b>",
+                f"<div style='margin-top:6px;padding:10px 12px;border-radius:12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.10);font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;color:#e5e7eb;'>"
+                f"{temp_password}"
+                "</div>",
+                "<br><b>Instrucciones:</b>",
+                "1) Entra al Admin con esta contraseña temporal.",
+                "2) El sistema te obligará a cambiarla inmediatamente.",
+                "3) Si tú no solicitaste esto, contacta al administrador.",
+            ]
+        ),
+        cta_text="Abrir Admin" if admin_url else None,
+        cta_url=admin_url,
+    )
+    email = _make_html_email(subject=subject, to=[to_email], text=text, html=html)
+    return _send_now(email)
+

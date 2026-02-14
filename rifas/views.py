@@ -13,7 +13,6 @@ from django.contrib.auth import get_user_model
 from django.contrib.admin.sites import site as admin_site
 from django.contrib.admin.views.decorators import staff_member_required
 from django.core.cache import cache
-from django.core.mail import send_mail
 from django.utils.translation import gettext as _
 
 from .forms import (
@@ -427,7 +426,19 @@ def admin_password_reset(request):
                 "- Si tú no solicitaste esto, contacta al administrador.\n"
             )
             try:
-                send_mail(subject, body, None, [user.email], fail_silently=False)
+                from .emails import send_admin_temporary_password
+
+                inferred = ""
+                try:
+                    inferred = request.build_absolute_uri("/").rstrip("/")
+                except Exception:
+                    inferred = ""
+                send_admin_temporary_password(
+                    to_email=user.email,
+                    username=getattr(user, "username", "") or "",
+                    temp_password=temp_pwd,
+                    site_url=(getattr(settings, "SITE_URL", "") or inferred),
+                )
             except Exception:
                 # Keep response generic; logs will show SMTP errors in Railway.
                 pass
