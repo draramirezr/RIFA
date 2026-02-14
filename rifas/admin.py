@@ -9,6 +9,7 @@ from django.urls import reverse
 from django.conf import settings
 
 from .models import AuditEvent, BankAccount, Customer, Raffle, RaffleCalculation, RaffleImage, RaffleOffer, SiteContent, Ticket, TicketPurchase, UserSecurity
+from django.db import models
 
 # Admin UI (Spanish)
 admin.site.site_header = "GanaHoyRD — Administración"
@@ -48,6 +49,10 @@ class RaffleAdmin(admin.ModelAdmin):
     prepopulated_fields = {"slug": ("title",)}
     inlines = [RaffleImageInline, RaffleOfferInline]
     actions = ["show_in_history_action", "hide_from_history_action"]
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.annotate(sold_tickets_annot=models.Count("tickets")).prefetch_related("offers")
 
     @admin.action(description="Mostrar en historial")
     def show_in_history_action(self, request, queryset):

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import os
 
 from django import forms
 from django.core.exceptions import ValidationError
@@ -9,11 +10,42 @@ from django.core.files.uploadedfile import InMemoryUploadedFile
 from .models import BankAccount, Raffle, TicketPurchase
 
 
+def _looks_like_image(file) -> bool:
+    """
+    Best-effort file signature check (do not trust content_type).
+    Supports JPEG/PNG/WebP.
+    """
+    try:
+        pos = file.tell()
+    except Exception:
+        pos = None
+    try:
+        file.seek(0)
+        header = file.read(16) or b""
+    except Exception:
+        return False
+    finally:
+        try:
+            if pos is not None:
+                file.seek(pos)
+            else:
+                file.seek(0)
+        except Exception:
+            pass
+
+    if header.startswith(b"\xff\xd8\xff"):  # JPEG
+        return True
+    if header.startswith(b"\x89PNG\r\n\x1a\n"):  # PNG
+        return True
+    if header.startswith(b"RIFF") and len(header) >= 12 and header[8:12] == b"WEBP":  # WebP
+        return True
+    return False
+
+
 def validate_image_file(file):
     # Basic server-side validation (do not rely on client-side checks)
-    content_type = getattr(file, "content_type", "") or ""
-    if not content_type.startswith("image/"):
-        raise ValidationError("El archivo debe ser una imagen (JPG/PNG/WebP).")
+    if not _looks_like_image(file):
+        raise ValidationError("El archivo no es una imagen válida (JPG/PNG/WebP).")
 
     # Allow bigger uploads; we optimize internally.
     hard_limit = 25 * 1024 * 1024  # 25MB
@@ -44,9 +76,10 @@ def _optimize_image_upload(file, *, target_max_bytes: int = 6 * 1024 * 1024) -> 
     elif img.mode == "L":
         img = img.convert("RGB")
 
-    # Try a couple of downscale + quality steps
-    max_dim_candidates = [2200, 1800, 1600, 1400, 1200, 1000, 900]
-    quality_candidates = [82, 75, 70, 65, 60, 55, 50, 45]
+    # Try a couple of downscale + quality steps.
+    # Keep this relatively small so processing is fast on big uploads.
+    max_dim_candidates = [1600, 1400, 1200, 1000, 900, 800]
+    quality_candidates = [75, 70, 65, 60, 55, 50, 45]
 
     best_bytes = None
     best_buf = None
@@ -55,7 +88,8 @@ def _optimize_image_upload(file, *, target_max_bytes: int = 6 * 1024 * 1024) -> 
         w, h = img.size
         scale = min(1.0, max_dim / float(max(w, h)))
         if scale < 1.0:
-            resized = img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
+            # LANCZOS is high quality but slower; BICUBIC is a good balance for speed.
+            resized = img.resize((int(w * scale), int(h * scale)), Image.BICUBIC)
         else:
             resized = img
 
@@ -79,7 +113,7 @@ def _optimize_image_upload(file, *, target_max_bytes: int = 6 * 1024 * 1024) -> 
         raise ValidationError("La imagen es muy grande incluso después de optimizarla.")
 
     best_buf.seek(0)
-    base_name = getattr(file, "name", "comprobante.jpg").rsplit(".", 1)[0]
+    base_name = os.path.basename(getattr(file, "name", "comprobante.jpg")).rsplit(".", 1)[0]
     out_name = f"{base_name}.jpg"
     field_name = getattr(file, "field_name", "proof_image")
     return InMemoryUploadedFile(
@@ -203,7 +237,7 @@ class TicketPurchaseForm(forms.ModelForm):
             return f
         # Transparente: optimizamos el comprobante para que pese poco y
         # los correos (y el almacenamiento) sean rápidos.
-        target_max_bytes = 900 * 1024  # ~900KB
+        target_max_bytes = 500 * 1024  # ~500KB (faster to upload/send/store)
         if getattr(f, "size", 0) > target_max_bytes:
             return _optimize_image_upload(f, target_max_bytes=target_max_bytes)
         return f

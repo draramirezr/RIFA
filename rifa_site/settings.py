@@ -22,14 +22,19 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-# In production, set SECRET_KEY via environment variable.
-SECRET_KEY = os.environ.get(
-    "DJANGO_SECRET_KEY",
-    "django-insecure-9&*y8he_@4q1ssz6h30y0s!_1)_gf)(c2r0l@bn8f__9+c5=c%",
-)
+SECRET_KEY = (os.environ.get("DJANGO_SECRET_KEY") or "").strip()
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get("DJANGO_DEBUG", "1") == "1"
+# Default to dev-friendly (DEBUG on) unless explicitly set.
+# In Railway/production always set DJANGO_DEBUG=0.
+_DEBUG_ENV = os.environ.get("DJANGO_DEBUG")
+DEBUG = (_DEBUG_ENV if _DEBUG_ENV is not None else "1") == "1"
+
+if not SECRET_KEY:
+    if not DEBUG:
+        raise ValueError("DJANGO_SECRET_KEY must be set in production when DJANGO_DEBUG=0.")
+    # Dev-only fallback
+    SECRET_KEY = "django-insecure-dev-only-do-not-use-in-production"
 
 ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
 CSRF_TRUSTED_ORIGINS = [
@@ -42,12 +47,15 @@ CSRF_TRUSTED_ORIGINS = [
 USE_X_FORWARDED_HOST = True
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
+# Cookies
+# HttpOnly always; Secure only when not DEBUG (HTTPS).
+SESSION_COOKIE_HTTPONLY = True
+CSRF_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+
 # Security defaults for production
 if not DEBUG:
-    SESSION_COOKIE_SECURE = True
-    CSRF_COOKIE_SECURE = True
-    SESSION_COOKIE_HTTPONLY = True
-    CSRF_COOKIE_HTTPONLY = True
     # Start low (safe) and increase once you're sure HTTPS is always on.
     SECURE_HSTS_SECONDS = int(os.environ.get("SECURE_HSTS_SECONDS", "60"))
     SECURE_HSTS_INCLUDE_SUBDOMAINS = os.environ.get("SECURE_HSTS_INCLUDE_SUBDOMAINS", "0") == "1"
@@ -207,6 +215,16 @@ TIME_ZONE = 'America/Santo_Domingo'
 USE_I18N = True
 
 USE_TZ = True
+
+# Cache (important for multi-worker setups)
+REDIS_URL = (os.environ.get("REDIS_URL", "") or "").strip()
+if REDIS_URL:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": REDIS_URL,
+        }
+    }
 
 # Logging (Railway/Gunicorn)
 # Ensures 500 errors print tracebacks to stdout/stderr so Railway logs show the cause.

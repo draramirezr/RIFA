@@ -14,18 +14,29 @@
     <div class="mt-6 rounded-2xl border border-white/10 bg-white/5 p-6">
       <form method="post" class="space-y-4">
         {% csrf_token %}
+        {% if rate_limited %}
+          <div class="rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-100">
+            Demasiadas búsquedas en poco tiempo. Espera 1 minuto y vuelve a intentar.
+          </div>
+        {% endif %}
 
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <label class="block text-sm text-slate-300">Rifa</label>
+            <label for="{{ form.raffle.id_for_label }}" class="block text-sm text-slate-300">Rifa</label>
             <div class="mt-1">{{ form.raffle }}</div>
             {% if form.raffle.errors %}<div class="mt-1 text-sm text-red-300">{{ form.raffle.errors }}</div>{% endif %}
           </div>
           <div>
             <label class="block text-sm text-slate-300">Teléfono</label>
             <div class="mt-1 grid grid-cols-3 gap-3">
-              <div class="col-span-1">{{ form.phone_prefix }}</div>
-              <div class="col-span-2">{{ form.phone_number }}</div>
+              <div class="col-span-1">
+                <label for="{{ form.phone_prefix.id_for_label }}" class="sr-only">Prefijo</label>
+                {{ form.phone_prefix }}
+              </div>
+              <div class="col-span-2">
+                <label for="{{ form.phone_number.id_for_label }}" class="sr-only">Número</label>
+                {{ form.phone_number }}
+              </div>
             </div>
             {% if form.phone_prefix.errors %}<div class="mt-1 text-sm text-red-300">{{ form.phone_prefix.errors }}</div>{% endif %}
             {% if form.phone_number.errors %}<div class="mt-1 text-sm text-red-300">{{ form.phone_number.errors }}</div>{% endif %}
@@ -33,7 +44,7 @@
         </div>
 
         <div>
-          <label class="block text-sm text-slate-300">Código (opcional)</label>
+          <label for="{{ form.reference.id_for_label }}" class="block text-sm text-slate-300">Código (opcional)</label>
           <div class="mt-1">{{ form.reference }}</div>
           <div class="mt-1 text-xs text-slate-400">{{ form.reference.help_text }}</div>
           {% if form.reference.errors %}<div class="mt-1 text-sm text-red-300">{{ form.reference.errors }}</div>{% endif %}

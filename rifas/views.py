@@ -4,6 +4,7 @@ from django.db import models
 from django.utils import timezone
 from django.views.decorators.cache import cache_page
 from django.views.decorators.http import require_http_methods
+import uuid
 
 import secrets
 
@@ -27,6 +28,32 @@ from .models import BankAccount, Raffle, SiteContent, Ticket, TicketPurchase, Us
 
 
 PUBLIC_PAGE_CACHE_SECONDS = 60
+
+
+def _client_ip(request) -> str:
+    # Best-effort IP extraction behind proxies.
+    xff = (request.META.get("HTTP_X_FORWARDED_FOR") or "").split(",")[0].strip()
+    return xff or (request.META.get("REMOTE_ADDR") or "unknown")
+
+
+def _rate_limit(*, key: str, limit: int, window_seconds: int) -> bool:
+    """
+    Simple counter-based rate limit using Django cache.
+    Returns True if allowed, False if limited.
+    """
+    try:
+        now_count = cache.get(key)
+        if now_count is None:
+            cache.set(key, 1, timeout=window_seconds)
+            return True
+        now_count = int(now_count) + 1
+        if now_count > int(limit):
+            return False
+        cache.set(key, now_count, timeout=window_seconds)
+        return True
+    except Exception:
+        # Fail open to avoid blocking real users on cache issues.
+        return True
 
 
 @cache_page(PUBLIC_PAGE_CACHE_SECONDS)
@@ -69,6 +96,29 @@ def buy_ticket(request, slug: str):
     bank_accounts = list(BankAccount.objects.filter(is_active=True).order_by("sort_order", "created_at")[:4])
 
     if request.method == "POST":
+        ip = _client_ip(request)
+        if not _rate_limit(key=f"rl:buy_ticket:{ip}", limit=8, window_seconds=60):
+            return render(
+                request,
+                "rifas/buy_ticket.html",
+                {
+                    "raffle": raffle,
+                    "form": TicketPurchaseForm(request.POST, request.FILES, raffle=raffle),
+                    "offer": offer,
+                    "bank_accounts": bank_accounts,
+                    "purchase_token": uuid.uuid4().hex,
+                    "rate_limited": True,
+                },
+                status=429,
+            )
+        # Idempotency token to prevent duplicate purchases on double-click / slow networks
+        token = (request.POST.get("purchase_token") or "").strip()
+        tokens = request.session.get("purchase_tokens") or {}
+        if isinstance(tokens, dict) and token and token in tokens:
+            try:
+                return redirect("rifas:thanks", purchase_id=int(tokens[token]))
+            except Exception:
+                pass
         form = TicketPurchaseForm(request.POST, request.FILES, raffle=raffle)
         if form.is_valid():
             purchase: TicketPurchase = form.save(commit=False)
@@ -76,6 +126,18 @@ def buy_ticket(request, slug: str):
             purchase.client_ip = request.META.get("REMOTE_ADDR")
             purchase.user_agent = (request.META.get("HTTP_USER_AGENT") or "")[:400]
             purchase.save()
+            # Mark token as used (keep small history)
+            if token:
+                if not isinstance(tokens, dict):
+                    tokens = {}
+                tokens[token] = purchase.id
+                # prune oldest entries (insertion order in modern Python)
+                try:
+                    while len(tokens) > 30:
+                        tokens.pop(next(iter(tokens)))
+                except Exception:
+                    pass
+                request.session["purchase_tokens"] = tokens
             # Emails must NEVER block or break purchases (SMTP may be blocked in hosting).
             try:
                 send_purchase_notification(request=request, purchase=purchase)
@@ -92,11 +154,32 @@ def buy_ticket(request, slug: str):
     return render(
         request,
         "rifas/buy_ticket.html",
-        {"raffle": raffle, "form": form, "offer": offer, "bank_accounts": bank_accounts},
+        {
+            "raffle": raffle,
+            "form": form,
+            "offer": offer,
+            "bank_accounts": bank_accounts,
+            "purchase_token": uuid.uuid4().hex,
+        },
     )
 
 
 def thanks(request, purchase_id: int):
+    # Prevent IDOR: do not allow enumerating other purchases by ID.
+    # Only allow if:
+    # - staff user, OR
+    # - this purchase was created in this session (tracked by purchase_tokens).
+    if not (getattr(request, "user", None) and request.user.is_authenticated and request.user.is_staff):
+        tokens = request.session.get("purchase_tokens") or {}
+        allowed_ids = set()
+        if isinstance(tokens, dict):
+            for v in tokens.values():
+                try:
+                    allowed_ids.add(int(v))
+                except Exception:
+                    continue
+        if int(purchase_id) not in allowed_ids:
+            raise Http404()
     purchase = get_object_or_404(TicketPurchase, pk=purchase_id)
     return render(request, "rifas/thanks.html", {"purchase": purchase})
 
@@ -106,6 +189,15 @@ def my_tickets(request):
     form = TicketLookupForm(request.POST or None)
     purchases = []
     raffle = None
+    if request.method == "POST":
+        ip = _client_ip(request)
+        if not _rate_limit(key=f"rl:my_tickets:{ip}", limit=20, window_seconds=60):
+            return render(
+                request,
+                "rifas/my_tickets.html",
+                {"form": form, "purchases": [], "raffle": None, "rate_limited": True},
+                status=429,
+            )
     if request.method == "POST" and form.is_valid():
         raffle = form.cleaned_data["raffle"]
         phone = form.cleaned_data["phone"]
@@ -128,9 +220,18 @@ def my_tickets(request):
 
 def raffle_history(request):
     now = timezone.now()
+    # Avoid N+1: annotate sold tickets and winner name in one query.
+    from django.db.models import OuterRef, Subquery
+
+    winner_name_sq = Subquery(
+        Ticket.objects.filter(raffle_id=OuterRef("pk"), number=OuterRef("winner_ticket_number"))
+        .values("purchase__full_name")[:1]
+    )
     finished = (
         Raffle.objects.filter(models.Q(draw_date__lte=now) | models.Q(is_active=False))
         .filter(show_in_history=True)
+        .annotate(sold_tickets_annot=models.Count("tickets"))
+        .annotate(winner_display_name_annot=winner_name_sq)
         .order_by("-draw_date")
     )
     return render(request, "rifas/history.html", {"finished": finished})

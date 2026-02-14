@@ -5,6 +5,7 @@ from django.utils.text import slugify
 import secrets
 from django.core.exceptions import ValidationError
 from django.conf import settings
+import os
 
 from imagekit.models import ImageSpecField
 from imagekit.processors import ResizeToFill, ResizeToFit
@@ -48,6 +49,28 @@ def validate_history_media_file(file):
     """
     content_type = getattr(file, "content_type", "") or ""
     if content_type.startswith("image/"):
+        # Do not trust content_type alone; validate image signature (JPEG/PNG/WebP).
+        try:
+            pos = file.tell()
+        except Exception:
+            pos = None
+        try:
+            file.seek(0)
+            header = file.read(16) or b""
+        finally:
+            try:
+                if pos is not None:
+                    file.seek(pos)
+                else:
+                    file.seek(0)
+            except Exception:
+                pass
+        is_jpeg = header.startswith(b"\xff\xd8\xff")
+        is_png = header.startswith(b"\x89PNG\r\n\x1a\n")
+        is_webp = header.startswith(b"RIFF") and len(header) >= 12 and header[8:12] == b"WEBP"
+        if not (is_jpeg or is_png or is_webp):
+            raise ValidationError("La imagen no es válida (JPG/PNG/WebP).")
+
         hard_limit = 25 * 1024 * 1024  # 25MB
         if getattr(file, "size", 0) > hard_limit:
             raise ValidationError("La imagen es demasiado grande (máximo 25MB).")
@@ -170,6 +193,10 @@ class Raffle(models.Model):
         verbose_name = "Rifa"
         verbose_name_plural = "Rifas"
         ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["is_active", "draw_date"], name="idx_raffle_active_draw"),
+            models.Index(fields=["show_in_history", "draw_date"], name="idx_raffle_hist_draw"),
+        ]
 
     def __str__(self) -> str:
         return self.title
@@ -231,6 +258,9 @@ class Raffle(models.Model):
         """
         if (self.winner_name or "").strip():
             return (self.winner_name or "").strip()
+        annotated = getattr(self, "winner_display_name_annot", None)
+        if annotated is not None:
+            return (str(annotated) or "").strip()
         n = getattr(self, "winner_ticket_number", None)
         if not n:
             return ""
@@ -697,6 +727,9 @@ class Ticket(models.Model):
             models.UniqueConstraint(fields=["raffle", "number"], name="uniq_raffle_ticket_number"),
         ]
         ordering = ["number"]
+        indexes = [
+            models.Index(fields=["raffle", "number"], name="idx_ticket_raffle_number"),
+        ]
 
     def __str__(self) -> str:
         return f"{self.raffle.title} - #{self.display_number}"

@@ -41,7 +41,8 @@
         <h2>{% translate "Resultados" %}</h2>
 
         {% if results %}
-          <table style="width:100%;">
+          <div style="overflow-x:auto; -webkit-overflow-scrolling: touch;">
+          <table style="width:100%; min-width: 760px;">
             <thead>
               <tr>
                 <th>{% translate "Rifa" %}</th>
@@ -80,6 +81,7 @@
               {% endfor %}
             </tbody>
           </table>
+          </div>
         {% else %}
           <p style="margin: 10px 0 0;">
             {% translate "No se encontró ningún boleto con ese número." %}
