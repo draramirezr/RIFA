@@ -12,8 +12,10 @@ from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.admin.sites import site as admin_site
 from django.contrib.admin.views.decorators import staff_member_required
+from django.conf import settings
 from django.core.cache import cache
 from django.utils.translation import gettext as _
+import logging
 
 from .forms import (
     AdminPasswordRecoverForm,
@@ -433,12 +435,14 @@ def admin_password_reset(request):
                     inferred = request.build_absolute_uri("/").rstrip("/")
                 except Exception:
                     inferred = ""
-                send_admin_temporary_password(
+                ok, err = send_admin_temporary_password(
                     to_email=user.email,
                     username=getattr(user, "username", "") or "",
                     temp_password=temp_pwd,
                     site_url=(getattr(settings, "SITE_URL", "") or inferred),
                 )
+                if not ok and getattr(settings, "EMAIL_LOG_ERRORS", False):
+                    logging.getLogger(__name__).warning("Admin password reset email failed: %s", err)
             except Exception:
                 # Keep response generic; logs will show SMTP errors in Railway.
                 pass
