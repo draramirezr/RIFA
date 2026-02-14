@@ -1,12 +1,14 @@
 from django.contrib import admin, messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
+from django import forms
 from django.core.exceptions import ValidationError
 from django.http import HttpResponse
 from django.utils.html import format_html
 from django.utils import timezone
 from django.urls import reverse
 from django.conf import settings
+import secrets
 
 from .models import AuditEvent, BankAccount, Customer, Raffle, RaffleCalculation, RaffleImage, RaffleOffer, SiteContent, Ticket, TicketPurchase, UserSecurity
 from django.db import models
@@ -687,4 +689,88 @@ except admin.sites.NotRegistered:
 @admin.register(User)
 class UserAdmin(DjangoUserAdmin):
     inlines = (UserSecurityInline,)
+
+    class AutoPasswordUserCreationForm(forms.ModelForm):
+        """
+        Create user without asking for password (we auto-generate + email it).
+        """
+
+        class Meta:
+            model = User
+            fields = ("username", "email", "first_name", "last_name", "is_active", "is_staff", "is_superuser", "groups", "user_permissions")
+
+        def clean_email(self):
+            email = (self.cleaned_data.get("email") or "").strip()
+            if not email:
+                raise forms.ValidationError("El email es requerido para crear el usuario (se enviará la contraseña temporal).")
+            return email
+
+        def save(self, commit=True):
+            obj = super().save(commit=False)
+            # Prevent empty password being saved (we will set a real one in save_model).
+            try:
+                obj.set_unusable_password()
+            except Exception:
+                pass
+            if commit:
+                obj.save()
+                self.save_m2m()
+            return obj
+
+    add_form = AutoPasswordUserCreationForm
+
+    add_fieldsets = (
+        (None, {"classes": ("wide",), "fields": ("username", "email", "first_name", "last_name")}),
+        ("Permisos", {"fields": ("is_active", "is_staff", "is_superuser", "groups", "user_permissions")}),
+    )
+
+    def save_model(self, request, obj, form, change):
+        """
+        On user creation: generate temp password, email it, force change at next admin login.
+        """
+        creating = not change or not getattr(obj, "pk", None)
+        super().save_model(request, obj, form, change)
+
+        if creating:
+            email = (getattr(obj, "email", "") or "").strip()
+            if not email:
+                self.message_user(
+                    request,
+                    "No se pudo enviar: el usuario no tiene email. Edita el usuario y agrega un email válido.",
+                    level=messages.WARNING,
+                )
+                return
+
+            temp_pwd = ("ADMIN-" + secrets.token_urlsafe(10)).replace("-", "").replace("_", "")[:12]
+            obj.set_password(temp_pwd)
+            obj.save(update_fields=["password"])
+
+            try:
+                sec, _created = UserSecurity.objects.get_or_create(user=obj)
+                sec.force_password_change = True
+                sec.password_hash_at_force = obj.password
+                sec.save()
+            except Exception:
+                pass
+
+            try:
+                from .emails import send_new_admin_user_credentials
+
+                inferred = ""
+                try:
+                    inferred = request.build_absolute_uri("/").rstrip("/")
+                except Exception:
+                    inferred = ""
+                ok, err = send_new_admin_user_credentials(
+                    to_email=email,
+                    username=getattr(obj, "username", "") or "",
+                    temp_password=temp_pwd,
+                    site_url=(getattr(settings, "SITE_URL", "") or inferred),
+                )
+                if ok:
+                    self.message_user(request, "Usuario creado. Se envió una contraseña temporal por correo.", level=messages.SUCCESS)
+                else:
+                    self.message_user(request, f"Usuario creado, pero no se pudo enviar el correo: {err}", level=messages.WARNING)
+            except Exception:
+                self.message_user(request, "Usuario creado, pero no se pudo enviar el correo (revisa logs).", level=messages.WARNING)
 

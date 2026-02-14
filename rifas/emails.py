@@ -583,3 +583,50 @@ def send_admin_temporary_password(*, to_email: str, username: str, temp_password
     email = _make_html_email(subject=subject, to=[to_email], text=text, html=html)
     return _send_now(email)
 
+
+def send_new_admin_user_credentials(*, to_email: str, username: str, temp_password: str, site_url: str | None = None) -> tuple[bool, str]:
+    """
+    Email sent when a new admin/staff user is created.
+    Contains an auto-generated temporary password and forces password change on first login.
+    Returns (ok, error_message).
+    """
+    to_email = (to_email or "").strip()
+    if not to_email:
+        return False, "Missing to_email"
+
+    base = (site_url or getattr(settings, "SITE_URL", "") or "").strip().rstrip("/")
+    admin_url = f"{base}/admin/" if base else None
+
+    subject = "Tu acceso al Admin - GanaHoyRD"
+    text = "\n".join(
+        [
+            "Se ha creado tu usuario para el panel administrador de GanaHoyRD.",
+            "",
+            f"Usuario: {username}",
+            f"Contraseña temporal: {temp_password}",
+            "",
+            "Al iniciar sesión, el sistema te pedirá cambiar la contraseña.",
+            "Si no esperabas este correo, contacta al administrador.",
+            "",
+            "— GanaHoyRD",
+        ]
+    )
+    html = _email_shell(
+        title="Tu acceso al Admin",
+        lead="Se creó tu usuario para administrar rifas en GanaHoyRD.",
+        body_html="<br>".join(
+            [
+                f"<b>Usuario:</b> {username}",
+                "<br><b>Contraseña temporal:</b>",
+                f"<div style='margin-top:6px;padding:10px 12px;border-radius:12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.10);font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;color:#e5e7eb;'>"
+                f"{temp_password}"
+                "</div>",
+                "<br>Al iniciar sesión, el sistema te pedirá cambiar la contraseña.",
+            ]
+        ),
+        cta_text="Abrir Admin" if admin_url else None,
+        cta_url=admin_url,
+    )
+    email = _make_html_email(subject=subject, to=[to_email], text=text, html=html)
+    return _send_now(email)
+
