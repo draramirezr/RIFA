@@ -434,14 +434,24 @@ class AdminRaffleCalculatorForm(forms.Form):
 class AdminRafflePerformanceForm(forms.Form):
     raffle = forms.ModelChoiceField(
         queryset=Raffle.objects.all().order_by("-created_at"),
-        required=True,
-        empty_label=None,
-        label="Rifa",
+        required=False,
+        empty_label="(Todas las rifas)",
+        label="Rifa (opcional)",
+    )
+    metric = forms.ChoiceField(
+        required=False,
+        label="Modo",
+        choices=(
+            ("gross", "Bruto (ingresos)"),
+            ("net", "Neto (ingresos - costos)"),
+        ),
+        initial="gross",
+        help_text="Neto usa el último cálculo guardado de la rifa (Costos totales).",
     )
     date_from = forms.DateField(
         required=False,
         label="Desde (opcional)",
-        help_text="Si lo dejas vacío, se usará la fecha de creación de la rifa.",
+        help_text="Si dejas vacío y no eliges rifa: últimos 30 días. Si eliges rifa: desde su creación.",
         widget=forms.DateInput(attrs={"type": "date"}),
     )
     date_to = forms.DateField(
@@ -470,6 +480,7 @@ class AdminRafflePerformanceForm(forms.Form):
         )
         self.fields["raffle"].widget.attrs.setdefault("class", base_select)
         self.fields["bank_account"].widget.attrs.setdefault("class", base_select)
+        self.fields["metric"].widget.attrs.setdefault("class", base_select)
         self.fields["date_from"].widget.attrs.setdefault("class", base_input)
         self.fields["date_to"].widget.attrs.setdefault("class", base_input)
 

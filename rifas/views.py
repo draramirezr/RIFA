@@ -369,81 +369,175 @@ def admin_raffle_performance(request):
     """
     from datetime import datetime, time, timedelta
 
-    from django.db.models import Count, Sum, Value
+    from django.db.models import Count, F, OuterRef, Subquery, Sum, Value
     from django.db.models.functions import Coalesce, TruncDate
 
     ctx = admin_site.each_context(request)
-    form = AdminRafflePerformanceForm(request.POST or None)
+    submitted = request.method == "POST" or any(k in request.GET for k in ("raffle", "date_from", "date_to", "bank_account", "metric"))
+    data = request.POST if request.method == "POST" else (request.GET if submitted else None)
+    form = AdminRafflePerformanceForm(data or None)
     result = None
 
-    if request.method == "POST" and form.is_valid():
-        raffle: Raffle = form.cleaned_data["raffle"]
+    if submitted and form.is_valid():
+        raffle: Raffle | None = form.cleaned_data.get("raffle")
         bank = form.cleaned_data.get("bank_account")
         d_from = form.cleaned_data.get("date_from")
         d_to = form.cleaned_data.get("date_to")
+        metric = (form.cleaned_data.get("metric") or "gross").strip() or "gross"
 
+        today = timezone.localdate()
         if not d_from:
-            try:
-                d_from = timezone.localdate(getattr(raffle, "created_at", None) or timezone.now())
-            except Exception:
-                d_from = timezone.localdate()
+            if raffle:
+                try:
+                    d_from = timezone.localdate(getattr(raffle, "created_at", None) or timezone.now())
+                except Exception:
+                    d_from = today
+            else:
+                d_from = today - timedelta(days=30)
         if not d_to:
-            d_to = timezone.localdate()
+            d_to = today
 
         tz = timezone.get_current_timezone()
         start_dt = timezone.make_aware(datetime.combine(d_from, time.min), tz)
         end_dt = timezone.make_aware(datetime.combine(d_to + timedelta(days=1), time.min), tz)
 
         qs = TicketPurchase.objects.filter(
-            raffle=raffle,
             status=TicketPurchase.Status.APPROVED,
             created_at__gte=start_dt,
             created_at__lt=end_dt,
         )
+        if raffle:
+            qs = qs.filter(raffle=raffle)
         if bank:
             qs = qs.filter(bank_account=bank)
 
-        totals = qs.aggregate(
-            purchases=Coalesce(Count("id"), 0),
-            revenue=Coalesce(Sum("total_amount"), 0),
-            paid_tickets=Coalesce(Sum("quantity"), 0),
-            bonus_tickets=Coalesce(Sum("bonus_quantity"), 0),
-            total_tickets=Coalesce(Sum("total_tickets"), 0),
+        # Cost source for net: latest saved calculator result for the raffle (if any)
+        from .models import RaffleCalculation
+
+        latest_cost_sq = Subquery(
+            RaffleCalculation.objects.filter(raffle_id=OuterRef("raffle_id"))
+            .order_by("-created_at")
+            .values("total_cost")[:1]
         )
 
-        by_bank = []
-        if not bank:
-            by_bank = list(
-                qs.values("bank_account__bank_name")
+        if raffle:
+            totals = qs.aggregate(
+                purchases=Coalesce(Count("id"), 0),
+                revenue=Coalesce(Sum("total_amount"), 0),
+                paid_tickets=Coalesce(Sum("quantity"), 0),
+                bonus_tickets=Coalesce(Sum("bonus_quantity"), 0),
+                total_tickets=Coalesce(Sum("total_tickets"), 0),
+            )
+            latest_cost = (
+                RaffleCalculation.objects.filter(raffle=raffle).order_by("-created_at").values_list("total_cost", flat=True).first()
+            )
+            net_profit = None
+            if metric == "net" and latest_cost is not None:
+                try:
+                    net_profit = int(totals.get("revenue") or 0) - int(latest_cost or 0)
+                except Exception:
+                    net_profit = None
+
+            by_bank = []
+            if not bank:
+                by_bank = list(
+                    qs.values("bank_account__bank_name")
+                    .annotate(
+                        bank_name=Coalesce("bank_account__bank_name", Value("Sin banco")),
+                        purchases=Coalesce(Count("id"), 0),
+                        revenue=Coalesce(Sum("total_amount"), 0),
+                        paid_tickets=Coalesce(Sum("quantity"), 0),
+                    )
+                    .order_by("-revenue", "-purchases")
+                )
+
+            by_day = list(
+                qs.annotate(day=TruncDate("created_at"))
+                .values("day")
                 .annotate(
-                    bank_name=Coalesce("bank_account__bank_name", Value("Sin banco")),
                     purchases=Coalesce(Count("id"), 0),
                     revenue=Coalesce(Sum("total_amount"), 0),
                     paid_tickets=Coalesce(Sum("quantity"), 0),
                 )
-                .order_by("-revenue", "-purchases")
+                .order_by("day")
             )
 
-        by_day = list(
-            qs.annotate(day=TruncDate("created_at"))
-            .values("day")
-            .annotate(
-                purchases=Coalesce(Count("id"), 0),
-                revenue=Coalesce(Sum("total_amount"), 0),
-                paid_tickets=Coalesce(Sum("quantity"), 0),
+            result = {
+                "kind": "detail",
+                "raffle": raffle,
+                "bank": bank,
+                "metric": metric,
+                "date_from": d_from,
+                "date_to": d_to,
+                "totals": totals,
+                "latest_cost": latest_cost,
+                "net_profit": net_profit,
+                "by_bank": by_bank,
+                "by_day": by_day,
+            }
+        else:
+            # Dashboard: multiple raffles
+            per_raffle = (
+                qs.values("raffle_id", "raffle__title")
+                .annotate(
+                    purchases=Coalesce(Count("id"), 0),
+                    revenue=Coalesce(Sum("total_amount"), 0),
+                    paid_tickets=Coalesce(Sum("quantity"), 0),
+                    bonus_tickets=Coalesce(Sum("bonus_quantity"), 0),
+                    total_tickets=Coalesce(Sum("total_tickets"), 0),
+                )
+                .annotate(latest_cost=latest_cost_sq)
             )
-            .order_by("day")
-        )
 
-        result = {
-            "raffle": raffle,
-            "bank": bank,
-            "date_from": d_from,
-            "date_to": d_to,
-            "totals": totals,
-            "by_bank": by_bank,
-            "by_day": by_day,
-        }
+            rows = []
+            total_value = 0
+            for r in per_raffle:
+                revenue = int(r.get("revenue") or 0)
+                cost = r.get("latest_cost", None)
+                cost_int = int(cost) if cost is not None else None
+                net = (revenue - cost_int) if (metric == "net" and cost_int is not None) else None
+                value = net if (metric == "net") else revenue
+                value_int = int(value or 0)
+                total_value += value_int
+                rows.append(
+                    {
+                        "raffle_id": r.get("raffle_id"),
+                        "raffle_title": r.get("raffle__title") or "",
+                        "purchases": int(r.get("purchases") or 0),
+                        "revenue": revenue,
+                        "paid_tickets": int(r.get("paid_tickets") or 0),
+                        "bonus_tickets": int(r.get("bonus_tickets") or 0),
+                        "total_tickets": int(r.get("total_tickets") or 0),
+                        "latest_cost": cost_int,
+                        "net_profit": net,
+                        "value": value_int,
+                    }
+                )
+
+            rows.sort(key=lambda x: (x.get("value") or 0), reverse=True)
+
+            # Build pie data: top 8 + others
+            pie_items = []
+            top = rows[:8]
+            other_sum = sum(int(x.get("value") or 0) for x in rows[8:])
+            for x in top:
+                v = int(x.get("value") or 0)
+                pct = (v / total_value * 100.0) if total_value > 0 else 0.0
+                pie_items.append({"label": x.get("raffle_title") or "—", "value": v, "pct": pct})
+            if other_sum:
+                pct = (other_sum / total_value * 100.0) if total_value > 0 else 0.0
+                pie_items.append({"label": "Otras", "value": int(other_sum), "pct": pct})
+
+            result = {
+                "kind": "dashboard",
+                "bank": bank,
+                "metric": metric,
+                "date_from": d_from,
+                "date_to": d_to,
+                "total_value": total_value,
+                "rows": rows,
+                "pie": pie_items,
+            }
 
     ctx.update({"title": "Rendimiento de rifa", "form": form, "result": result})
     return render(request, "admin/raffle_performance.html", ctx)

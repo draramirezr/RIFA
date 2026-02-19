@@ -1,5 +1,6 @@
 {% extends "admin/base_site.html" %}
 {% load i18n humanize %}
+{% load static %}
 
 {% block content %}
   <div id="content-main">
@@ -15,6 +16,15 @@
               <label for="{{ form.raffle.id_for_label }}">{{ form.raffle.label }}</label>
               <div class="fieldBox">{{ form.raffle }}</div>
               {% if form.raffle.errors %}{{ form.raffle.errors }}{% endif %}
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div>
+              <label for="{{ form.metric.id_for_label }}">{{ form.metric.label }}</label>
+              <div class="fieldBox">{{ form.metric }}</div>
+              {% if form.metric.help_text %}<div class="help">{{ form.metric.help_text }}</div>{% endif %}
+              {% if form.metric.errors %}{{ form.metric.errors }}{% endif %}
             </div>
           </div>
 
@@ -52,98 +62,214 @@
     </div>
 
     {% if result %}
-      <div class="module">
-        <h2>{% translate "Resumen" %}</h2>
+      <p class="help" style="margin-top: 6px;">
+        {% translate "Solo incluye compras APROBADAS. Las ofertas NO aumentan ingresos (solo boletos emitidos)." %}
+        <br>
+        {% translate "Rango:" %} <b>{{ result.date_from|date:"d/m/Y" }}</b> – <b>{{ result.date_to|date:"d/m/Y" }}</b>
+        {% if result.bank %} | {% translate "Banco:" %} <b>{{ result.bank }}</b>{% endif %}
+      </p>
 
-        <p class="help" style="margin-top: 6px;">
-          {% translate "Solo incluye compras APROBADAS." %}
-          <br>
-          {% translate "Rango:" %} <b>{{ result.date_from|date:"d/m/Y" }}</b> – <b>{{ result.date_to|date:"d/m/Y" }}</b>
-          {% if result.bank %} | {% translate "Banco:" %} <b>{{ result.bank }}</b>{% endif %}
-        </p>
-
-        <div style="overflow-x:auto; -webkit-overflow-scrolling: touch;">
-          <table style="width:100%; min-width: 520px;">
-            <tbody>
-              <tr>
-                <th style="width:40%;">{% translate "Ingresos (RD$)" %}</th>
-                <td><strong>RD$ {{ result.totals.revenue|intcomma }}</strong></td>
-              </tr>
-              <tr>
-                <th>{% translate "Compras aprobadas" %}</th>
-                <td>{{ result.totals.purchases|intcomma }}</td>
-              </tr>
-              <tr>
-                <th>{% translate "Boletos pagados confirmados" %}</th>
-                <td>{{ result.totals.paid_tickets|intcomma }}</td>
-              </tr>
-              <tr>
-                <th>{% translate "Boletos gratis (ofertas)" %}</th>
-                <td>{{ result.totals.bonus_tickets|intcomma }}</td>
-              </tr>
-              <tr>
-                <th>{% translate "Total boletos emitidos" %}</th>
-                <td>{{ result.totals.total_tickets|intcomma }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {% if result.by_bank %}
+      {% if result.kind == "dashboard" %}
         <div class="module">
-          <h2>{% translate "Desglose por banco" %}</h2>
+          <h2>{% translate "Dashboard (todas las rifas)" %}</h2>
+          <p class="help" style="margin-top:6px;">
+            {% if result.metric == "net" %}
+              {% translate "Modo Neto: usa el último cálculo guardado de cada rifa (Costos totales). Si una rifa no tiene cálculo, su neto se muestra como N/A." %}
+            {% else %}
+              {% translate "Modo Bruto: ingresos por compras aprobadas." %}
+            {% endif %}
+          </p>
+
+          <div style="display:flex; gap:18px; flex-wrap:wrap; align-items:flex-start;">
+            <div style="flex: 0 0 320px; max-width: 100%;">
+              <canvas id="pieChart" width="320" height="320" style="max-width: 100%; background: transparent;"></canvas>
+              {{ result.pie|json_script:"pie-data" }}
+              <p class="help" style="margin-top:10px;">
+                {% if result.metric == "net" %}
+                  {% translate "Distribución por beneficio neto." %}
+                {% else %}
+                  {% translate "Distribución por ingresos." %}
+                {% endif %}
+              </p>
+            </div>
+
+            <div style="flex: 1 1 520px; min-width: 320px;">
+              <div style="overflow-x:auto; -webkit-overflow-scrolling: touch;">
+                <table style="width:100%; min-width: 920px;">
+                  <thead>
+                    <tr>
+                      <th>{% translate "Rifa" %}</th>
+                      <th>{% translate "Compras" %}</th>
+                      <th>{% translate "Boletos pagados" %}</th>
+                      <th>{% translate "Boletos gratis" %}</th>
+                      <th>{% translate "Total emitidos" %}</th>
+                      <th>{% translate "Ingresos (RD$)" %}</th>
+                      <th>{% translate "Costos (último cálculo)" %}</th>
+                      <th>{% translate "Neto (RD$)" %}</th>
+                      <th>{% translate "Detalle" %}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for r in result.rows %}
+                      <tr>
+                        <td>{{ r.raffle_title }}</td>
+                        <td>{{ r.purchases|intcomma }}</td>
+                        <td>{{ r.paid_tickets|intcomma }}</td>
+                        <td>{{ r.bonus_tickets|intcomma }}</td>
+                        <td>{{ r.total_tickets|intcomma }}</td>
+                        <td>RD$ {{ r.revenue|intcomma }}</td>
+                        <td>
+                          {% if r.latest_cost != None %}RD$ {{ r.latest_cost|intcomma }}{% else %}—{% endif %}
+                        </td>
+                        <td>
+                          {% if r.net_profit != None %}RD$ {{ r.net_profit|intcomma }}{% else %}—{% endif %}
+                        </td>
+                        <td>
+                          <a class="button" href="?raffle={{ r.raffle_id }}&date_from={{ result.date_from|date:'Y-m-d' }}&date_to={{ result.date_to|date:'Y-m-d' }}&metric={{ result.metric }}{% if result.bank %}&bank_account={{ result.bank.id }}{% endif %}">
+                            {% translate "Ver" %}
+                          </a>
+                        </td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <script>
+          (function () {
+            const el = document.getElementById("pie-data");
+            const canvas = document.getElementById("pieChart");
+            if (!el || !canvas) return;
+            let data = [];
+            try { data = JSON.parse(el.textContent || "[]"); } catch { data = []; }
+            const ctx = canvas.getContext("2d");
+            if (!ctx || !data.length) return;
+
+            const total = data.reduce((s, x) => s + (Number(x.value) || 0), 0) || 1;
+            const cx = canvas.width / 2, cy = canvas.height / 2;
+            const r = Math.min(cx, cy) - 6;
+            let start = -Math.PI / 2;
+            data.forEach((item, i) => {
+              const v = Number(item.value) || 0;
+              const ang = (v / total) * Math.PI * 2;
+              const end = start + ang;
+              const hue = (i * 47) % 360;
+              ctx.beginPath();
+              ctx.moveTo(cx, cy);
+              ctx.arc(cx, cy, r, start, end);
+              ctx.closePath();
+              ctx.fillStyle = `hsl(${hue} 70% 55%)`;
+              ctx.fill();
+              start = end;
+            });
+            // donut hole
+            ctx.beginPath();
+            ctx.arc(cx, cy, r * 0.55, 0, Math.PI * 2);
+            ctx.closePath();
+            ctx.fillStyle = "#0f172a";
+            ctx.fill();
+          })();
+        </script>
+      {% else %}
+        <div class="module">
+          <h2>{% translate "Resumen (rifa seleccionada)" %}</h2>
+
           <div style="overflow-x:auto; -webkit-overflow-scrolling: touch;">
-            <table style="width:100%; min-width: 720px;">
-              <thead>
-                <tr>
-                  <th>{% translate "Banco" %}</th>
-                  <th>{% translate "Compras" %}</th>
-                  <th>{% translate "Boletos pagados" %}</th>
-                  <th>{% translate "Ingresos (RD$)" %}</th>
-                </tr>
-              </thead>
+            <table style="width:100%; min-width: 560px;">
               <tbody>
-                {% for r in result.by_bank %}
+                <tr>
+                  <th style="width:40%;">{% translate "Ingresos (RD$)" %}</th>
+                  <td><strong>RD$ {{ result.totals.revenue|intcomma }}</strong></td>
+                </tr>
+                {% if result.metric == "net" %}
                   <tr>
-                    <td>{{ r.bank_name }}</td>
-                    <td>{{ r.purchases|intcomma }}</td>
-                    <td>{{ r.paid_tickets|intcomma }}</td>
-                    <td>RD$ {{ r.revenue|intcomma }}</td>
+                    <th>{% translate "Costos (último cálculo)" %}</th>
+                    <td>{% if result.latest_cost != None %}RD$ {{ result.latest_cost|intcomma }}{% else %}—{% endif %}</td>
                   </tr>
-                {% endfor %}
+                  <tr>
+                    <th>{% translate "Beneficio neto (RD$)" %}</th>
+                    <td>{% if result.net_profit != None %}<strong>RD$ {{ result.net_profit|intcomma }}</strong>{% else %}—{% endif %}</td>
+                  </tr>
+                {% endif %}
+                <tr>
+                  <th>{% translate "Compras aprobadas" %}</th>
+                  <td>{{ result.totals.purchases|intcomma }}</td>
+                </tr>
+                <tr>
+                  <th>{% translate "Boletos pagados confirmados" %}</th>
+                  <td>{{ result.totals.paid_tickets|intcomma }}</td>
+                </tr>
+                <tr>
+                  <th>{% translate "Boletos gratis (ofertas)" %}</th>
+                  <td>{{ result.totals.bonus_tickets|intcomma }}</td>
+                </tr>
+                <tr>
+                  <th>{% translate "Total boletos emitidos" %}</th>
+                  <td>{{ result.totals.total_tickets|intcomma }}</td>
+                </tr>
               </tbody>
             </table>
           </div>
         </div>
-      {% endif %}
 
-      {% if result.by_day %}
-        <div class="module">
-          <h2>{% translate "Evolución por día" %}</h2>
-          <div style="overflow-x:auto; -webkit-overflow-scrolling: touch;">
-            <table style="width:100%; min-width: 720px;">
-              <thead>
-                <tr>
-                  <th>{% translate "Día" %}</th>
-                  <th>{% translate "Compras" %}</th>
-                  <th>{% translate "Boletos pagados" %}</th>
-                  <th>{% translate "Ingresos (RD$)" %}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for r in result.by_day %}
+        {% if result.by_bank %}
+          <div class="module">
+            <h2>{% translate "Desglose por banco" %}</h2>
+            <div style="overflow-x:auto; -webkit-overflow-scrolling: touch;">
+              <table style="width:100%; min-width: 720px;">
+                <thead>
                   <tr>
-                    <td>{{ r.day|date:"d/m/Y" }}</td>
-                    <td>{{ r.purchases|intcomma }}</td>
-                    <td>{{ r.paid_tickets|intcomma }}</td>
-                    <td>RD$ {{ r.revenue|intcomma }}</td>
+                    <th>{% translate "Banco" %}</th>
+                    <th>{% translate "Compras" %}</th>
+                    <th>{% translate "Boletos pagados" %}</th>
+                    <th>{% translate "Ingresos (RD$)" %}</th>
                   </tr>
-                {% endfor %}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {% for r in result.by_bank %}
+                    <tr>
+                      <td>{{ r.bank_name }}</td>
+                      <td>{{ r.purchases|intcomma }}</td>
+                      <td>{{ r.paid_tickets|intcomma }}</td>
+                      <td>RD$ {{ r.revenue|intcomma }}</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+        {% endif %}
+
+        {% if result.by_day %}
+          <div class="module">
+            <h2>{% translate "Evolución por día" %}</h2>
+            <div style="overflow-x:auto; -webkit-overflow-scrolling: touch;">
+              <table style="width:100%; min-width: 720px;">
+                <thead>
+                  <tr>
+                    <th>{% translate "Día" %}</th>
+                    <th>{% translate "Compras" %}</th>
+                    <th>{% translate "Boletos pagados" %}</th>
+                    <th>{% translate "Ingresos (RD$)" %}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for r in result.by_day %}
+                    <tr>
+                      <td>{{ r.day|date:"d/m/Y" }}</td>
+                      <td>{{ r.purchases|intcomma }}</td>
+                      <td>{{ r.paid_tickets|intcomma }}</td>
+                      <td>RD$ {{ r.revenue|intcomma }}</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        {% endif %}
       {% endif %}
     {% endif %}
   </div>
