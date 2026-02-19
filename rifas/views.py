@@ -20,6 +20,7 @@ import logging
 from .forms import (
     AdminPasswordRecoverForm,
     AdminRaffleCalculatorForm,
+    AdminRafflePerformanceForm,
     AdminWinnerLookupForm,
     TicketLookupForm,
     TicketPurchaseForm,
@@ -357,6 +358,95 @@ def admin_raffle_calculator(request):
 
     ctx.update({"title": "Calculadora de boletos", "form": form, "result": result})
     return render(request, "admin/raffle_calculator.html", ctx)
+
+
+@staff_member_required
+@require_http_methods(["GET", "POST"])
+def admin_raffle_performance(request):
+    """
+    Admin-only report: performance of a raffle over a date range (optional) and bank filter (optional).
+    Metrics are based on APPROVED purchases only.
+    """
+    from datetime import datetime, time, timedelta
+
+    from django.db.models import Count, Sum, Value
+    from django.db.models.functions import Coalesce, TruncDate
+
+    ctx = admin_site.each_context(request)
+    form = AdminRafflePerformanceForm(request.POST or None)
+    result = None
+
+    if request.method == "POST" and form.is_valid():
+        raffle: Raffle = form.cleaned_data["raffle"]
+        bank = form.cleaned_data.get("bank_account")
+        d_from = form.cleaned_data.get("date_from")
+        d_to = form.cleaned_data.get("date_to")
+
+        if not d_from:
+            try:
+                d_from = timezone.localdate(getattr(raffle, "created_at", None) or timezone.now())
+            except Exception:
+                d_from = timezone.localdate()
+        if not d_to:
+            d_to = timezone.localdate()
+
+        tz = timezone.get_current_timezone()
+        start_dt = timezone.make_aware(datetime.combine(d_from, time.min), tz)
+        end_dt = timezone.make_aware(datetime.combine(d_to + timedelta(days=1), time.min), tz)
+
+        qs = TicketPurchase.objects.filter(
+            raffle=raffle,
+            status=TicketPurchase.Status.APPROVED,
+            created_at__gte=start_dt,
+            created_at__lt=end_dt,
+        )
+        if bank:
+            qs = qs.filter(bank_account=bank)
+
+        totals = qs.aggregate(
+            purchases=Coalesce(Count("id"), 0),
+            revenue=Coalesce(Sum("total_amount"), 0),
+            paid_tickets=Coalesce(Sum("quantity"), 0),
+            bonus_tickets=Coalesce(Sum("bonus_quantity"), 0),
+            total_tickets=Coalesce(Sum("total_tickets"), 0),
+        )
+
+        by_bank = []
+        if not bank:
+            by_bank = list(
+                qs.values("bank_account__bank_name")
+                .annotate(
+                    bank_name=Coalesce("bank_account__bank_name", Value("Sin banco")),
+                    purchases=Coalesce(Count("id"), 0),
+                    revenue=Coalesce(Sum("total_amount"), 0),
+                    paid_tickets=Coalesce(Sum("quantity"), 0),
+                )
+                .order_by("-revenue", "-purchases")
+            )
+
+        by_day = list(
+            qs.annotate(day=TruncDate("created_at"))
+            .values("day")
+            .annotate(
+                purchases=Coalesce(Count("id"), 0),
+                revenue=Coalesce(Sum("total_amount"), 0),
+                paid_tickets=Coalesce(Sum("quantity"), 0),
+            )
+            .order_by("day")
+        )
+
+        result = {
+            "raffle": raffle,
+            "bank": bank,
+            "date_from": d_from,
+            "date_to": d_to,
+            "totals": totals,
+            "by_bank": by_bank,
+            "by_day": by_day,
+        }
+
+    ctx.update({"title": "Rendimiento de rifa", "form": form, "result": result})
+    return render(request, "admin/raffle_performance.html", ctx)
 
 
 @cache_page(PUBLIC_PAGE_CACHE_SECONDS)

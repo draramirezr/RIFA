@@ -430,3 +430,46 @@ class AdminRaffleCalculatorForm(forms.Form):
             self.fields[k].widget.attrs.setdefault("inputmode", "numeric")
             self.fields[k].widget.attrs.setdefault("pattern", "[0-9]*")
 
+
+class AdminRafflePerformanceForm(forms.Form):
+    raffle = forms.ModelChoiceField(
+        queryset=Raffle.objects.all().order_by("-created_at"),
+        required=True,
+        empty_label=None,
+        label="Rifa",
+    )
+    date_from = forms.DateField(
+        required=False,
+        label="Desde (opcional)",
+        help_text="Si lo dejas vacío, se usará la fecha de creación de la rifa.",
+        widget=forms.DateInput(attrs={"type": "date"}),
+    )
+    date_to = forms.DateField(
+        required=False,
+        label="Hasta (opcional)",
+        help_text="Si lo dejas vacío, se usará hoy.",
+        widget=forms.DateInput(attrs={"type": "date"}),
+    )
+    bank_account = forms.ModelChoiceField(
+        queryset=BankAccount.objects.all().order_by("bank_name", "account_number"),
+        required=False,
+        empty_label="(Todos los bancos)",
+        label="Banco (opcional)",
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        base_input = (
+            "w-full rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3 "
+            "text-slate-100 placeholder:text-slate-500 outline-none "
+            "focus:border-emerald-400/60 focus:ring-2 focus:ring-emerald-400/15"
+        )
+        base_select = (
+            "w-full rounded-xl border border-white/10 bg-slate-950/40 px-3 py-3 "
+            "text-slate-100 outline-none focus:border-emerald-400/60 focus:ring-2 focus:ring-emerald-400/15"
+        )
+        self.fields["raffle"].widget.attrs.setdefault("class", base_select)
+        self.fields["bank_account"].widget.attrs.setdefault("class", base_select)
+        self.fields["date_from"].widget.attrs.setdefault("class", base_input)
+        self.fields["date_to"].widget.attrs.setdefault("class", base_input)
+

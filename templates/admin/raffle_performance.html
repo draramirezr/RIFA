@@ -1,0 +1,151 @@
+{% extends "admin/base_site.html" %}
+{% load i18n humanize %}
+
+{% block content %}
+  <div id="content-main">
+    <h1>{% translate "Rendimiento de rifa" %}</h1>
+
+    <div class="module">
+      <form method="post" novalidate>
+        {% csrf_token %}
+
+        <fieldset class="module aligned">
+          <div class="form-row">
+            <div>
+              <label for="{{ form.raffle.id_for_label }}">{{ form.raffle.label }}</label>
+              <div class="fieldBox">{{ form.raffle }}</div>
+              {% if form.raffle.errors %}{{ form.raffle.errors }}{% endif %}
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div>
+              <label for="{{ form.date_from.id_for_label }}">{{ form.date_from.label }}</label>
+              <div class="fieldBox">{{ form.date_from }}</div>
+              {% if form.date_from.help_text %}<div class="help">{{ form.date_from.help_text }}</div>{% endif %}
+              {% if form.date_from.errors %}{{ form.date_from.errors }}{% endif %}
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div>
+              <label for="{{ form.date_to.id_for_label }}">{{ form.date_to.label }}</label>
+              <div class="fieldBox">{{ form.date_to }}</div>
+              {% if form.date_to.help_text %}<div class="help">{{ form.date_to.help_text }}</div>{% endif %}
+              {% if form.date_to.errors %}{{ form.date_to.errors }}{% endif %}
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div>
+              <label for="{{ form.bank_account.id_for_label }}">{{ form.bank_account.label }}</label>
+              <div class="fieldBox">{{ form.bank_account }}</div>
+              {% if form.bank_account.errors %}{{ form.bank_account.errors }}{% endif %}
+            </div>
+          </div>
+        </fieldset>
+
+        <div class="submit-row">
+          <input type="submit" value="{% translate 'Ver rendimiento' %}" class="default">
+        </div>
+      </form>
+    </div>
+
+    {% if result %}
+      <div class="module">
+        <h2>{% translate "Resumen" %}</h2>
+
+        <p class="help" style="margin-top: 6px;">
+          {% translate "Solo incluye compras APROBADAS." %}
+          <br>
+          {% translate "Rango:" %} <b>{{ result.date_from|date:"d/m/Y" }}</b> – <b>{{ result.date_to|date:"d/m/Y" }}</b>
+          {% if result.bank %} | {% translate "Banco:" %} <b>{{ result.bank }}</b>{% endif %}
+        </p>
+
+        <div style="overflow-x:auto; -webkit-overflow-scrolling: touch;">
+          <table style="width:100%; min-width: 520px;">
+            <tbody>
+              <tr>
+                <th style="width:40%;">{% translate "Ingresos (RD$)" %}</th>
+                <td><strong>RD$ {{ result.totals.revenue|intcomma }}</strong></td>
+              </tr>
+              <tr>
+                <th>{% translate "Compras aprobadas" %}</th>
+                <td>{{ result.totals.purchases|intcomma }}</td>
+              </tr>
+              <tr>
+                <th>{% translate "Boletos pagados confirmados" %}</th>
+                <td>{{ result.totals.paid_tickets|intcomma }}</td>
+              </tr>
+              <tr>
+                <th>{% translate "Boletos gratis (ofertas)" %}</th>
+                <td>{{ result.totals.bonus_tickets|intcomma }}</td>
+              </tr>
+              <tr>
+                <th>{% translate "Total boletos emitidos" %}</th>
+                <td>{{ result.totals.total_tickets|intcomma }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {% if result.by_bank %}
+        <div class="module">
+          <h2>{% translate "Desglose por banco" %}</h2>
+          <div style="overflow-x:auto; -webkit-overflow-scrolling: touch;">
+            <table style="width:100%; min-width: 720px;">
+              <thead>
+                <tr>
+                  <th>{% translate "Banco" %}</th>
+                  <th>{% translate "Compras" %}</th>
+                  <th>{% translate "Boletos pagados" %}</th>
+                  <th>{% translate "Ingresos (RD$)" %}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for r in result.by_bank %}
+                  <tr>
+                    <td>{{ r.bank_name }}</td>
+                    <td>{{ r.purchases|intcomma }}</td>
+                    <td>{{ r.paid_tickets|intcomma }}</td>
+                    <td>RD$ {{ r.revenue|intcomma }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      {% endif %}
+
+      {% if result.by_day %}
+        <div class="module">
+          <h2>{% translate "Evolución por día" %}</h2>
+          <div style="overflow-x:auto; -webkit-overflow-scrolling: touch;">
+            <table style="width:100%; min-width: 720px;">
+              <thead>
+                <tr>
+                  <th>{% translate "Día" %}</th>
+                  <th>{% translate "Compras" %}</th>
+                  <th>{% translate "Boletos pagados" %}</th>
+                  <th>{% translate "Ingresos (RD$)" %}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for r in result.by_day %}
+                  <tr>
+                    <td>{{ r.day|date:"d/m/Y" }}</td>
+                    <td>{{ r.purchases|intcomma }}</td>
+                    <td>{{ r.paid_tickets|intcomma }}</td>
+                    <td>RD$ {{ r.revenue|intcomma }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      {% endif %}
+    {% endif %}
+  </div>
+{% endblock %}
+
