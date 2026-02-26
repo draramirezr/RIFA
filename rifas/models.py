@@ -98,6 +98,11 @@ class Raffle(models.Model):
     slug = models.SlugField(max_length=220, unique=True, blank=True)
     description = models.TextField(blank=True)
     draw_date = models.DateTimeField()
+    show_draw_date = models.BooleanField(
+        "Mostrar fecha",
+        default=True,
+        help_text="Si está desactivado, no se mostrará la fecha del sorteo en la web.",
+    )
     price_per_ticket = models.PositiveIntegerField(validators=[MinValueValidator(0)])
     max_tickets = models.PositiveIntegerField(null=True, blank=True, help_text="Opcional. Límite total de boletos.")
     min_purchase_quantity = models.PositiveIntegerField(

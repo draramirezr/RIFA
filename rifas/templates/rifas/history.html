@@ -29,9 +29,9 @@
               <div class="mt-1 text-sm text-slate-300">
                 Culminó:
                 {% if raffle.finished_at %}
-                  {{ raffle.finished_at|date:"d M Y, h:i a" }}
+                  {{ raffle.finished_at|date:"d M Y" }}
                 {% else %}
-                  {{ raffle.draw_date|date:"d M Y, h:i a" }}
+                  {{ raffle.draw_date|date:"d M Y" }}
                 {% endif %}
               </div>
             </div>

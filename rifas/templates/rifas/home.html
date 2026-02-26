@@ -28,7 +28,9 @@
                 <div class="flex items-start justify-between gap-4">
                   <div>
                     <div class="text-lg font-semibold">{{ raffle.title }}</div>
-                    <div class="mt-1 text-sm text-slate-300">Sorteo: {{ raffle.draw_date|date:"d M Y, h:i a" }}</div>
+                    {% if raffle.show_draw_date %}
+                      <div class="mt-1 text-sm text-slate-300">Sorteo: {{ raffle.draw_date|date:"d M Y" }}</div>
+                    {% endif %}
                   </div>
                   <div class="rounded-full bg-emerald-500/15 px-3 py-1 text-sm text-emerald-200">
                     RD$ {{ raffle.price_per_ticket|intcomma }}

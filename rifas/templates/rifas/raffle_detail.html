@@ -3,15 +3,17 @@
 {% block title %}{{ raffle.title }}{% endblock %}
 
 {% block og_type %}product{% endblock %}
-{% block meta_description %}Participa en la rifa “{{ raffle.title }}”. Precio por boleto RD$ {{ raffle.price_per_ticket|intcomma }}. Sorteo: {{ raffle.draw_date|date:"d M Y, h:i a" }}.{% endblock %}
+{% block meta_description %}Participa en la rifa “{{ raffle.title }}”. Precio por boleto RD$ {{ raffle.price_per_ticket|intcomma }}.{% if raffle.show_draw_date %} Sorteo: {{ raffle.draw_date|date:"d M Y" }}.{% endif %}{% endblock %}
 
 {% block content %}
   <div class="grid grid-cols-1 gap-8 lg:grid-cols-3">
     <div class="lg:col-span-2">
       <h1 class="text-3xl font-semibold tracking-tight">{{ raffle.title }}</h1>
-      <div class="mt-2 text-slate-300">
-        Sorteo: <span class="text-slate-100">{{ raffle.draw_date|date:"d M Y, h:i a" }}</span>
-      </div>
+      {% if raffle.show_draw_date %}
+        <div class="mt-2 text-slate-300">
+          Sorteo: <span class="text-slate-100">{{ raffle.draw_date|date:"d M Y" }}</span>
+        </div>
+      {% endif %}
 
       {% if raffle.video or raffle.image or raffle.images.all %}
         <div class="mt-6">

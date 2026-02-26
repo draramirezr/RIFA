@@ -6,12 +6,14 @@ from django.core.exceptions import ValidationError
 from django.http import HttpResponse
 from django.utils.html import format_html
 from django.utils import timezone
+from django.utils.timezone import make_aware
 from django.urls import reverse
 from django.conf import settings
 import secrets
 
 from .models import AuditEvent, BankAccount, Customer, Raffle, RaffleCalculation, RaffleImage, RaffleOffer, SiteContent, Ticket, TicketPurchase, UserSecurity
 from django.db import models
+from datetime import datetime, time
 
 # Admin UI (Spanish)
 admin.site.site_header = "GanaHoyRD — Administración"
@@ -35,18 +37,63 @@ class RaffleImageInline(admin.TabularInline):
     ordering = ("sort_order", "created_at")
 
 
+class RaffleAdminForm(forms.ModelForm):
+    """
+    Admin UX: allow picking only a date (no required hour).
+    We store a safe default time internally (end of day).
+    """
+
+    draw_date = forms.DateField(
+        label="Fecha de sorteo",
+        required=True,
+        widget=forms.DateInput(attrs={"type": "date"}),
+        help_text="Selecciona solo la fecha. La hora se guarda automáticamente.",
+    )
+    finished_at = forms.DateField(
+        label="Fecha de finalización",
+        required=False,
+        widget=forms.DateInput(attrs={"type": "date"}),
+        help_text="Opcional. Selecciona solo la fecha. La hora se guarda automáticamente.",
+    )
+
+    class Meta:
+        model = Raffle
+        fields = "__all__"
+
+    def _date_to_dt_end_of_day(self, d):
+        if not d:
+            return None
+        tz = timezone.get_current_timezone()
+        dt = datetime.combine(d, time(23, 59, 0))
+        try:
+            return make_aware(dt, timezone=tz)
+        except Exception:
+            # If already aware or fails, fall back.
+            return dt
+
+    def clean_draw_date(self):
+        d = self.cleaned_data.get("draw_date")
+        return self._date_to_dt_end_of_day(d)
+
+    def clean_finished_at(self):
+        d = self.cleaned_data.get("finished_at")
+        return self._date_to_dt_end_of_day(d) if d else None
+
+
 @admin.register(Raffle)
 class RaffleAdmin(admin.ModelAdmin):
+    form = RaffleAdminForm
     list_display = (
         "title",
         "draw_date",
+        "show_draw_date",
         "price_per_ticket",
         "ticket_counter",
         "is_active",
         "show_in_history",
         "created_at",
     )
-    list_filter = ("is_active", "show_in_history")
+    list_filter = ("is_active", "show_in_history", "show_draw_date")
     search_fields = ("title", "slug")
     prepopulated_fields = {"slug": ("title",)}
     inlines = [RaffleImageInline, RaffleOfferInline]
