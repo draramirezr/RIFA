@@ -1,0 +1,9 @@
+/* Small global utility styles (no Tailwind rebuild needed) */
+:root {
+  --gh-emerald-soft: #a7f3d0; /* similar to Tailwind emerald-200 */
+}
+
+.gh-text-success {
+  color: var(--gh-emerald-soft) !important;
+}
+
