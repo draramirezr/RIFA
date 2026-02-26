@@ -46,19 +46,48 @@ class RaffleAdminForm(forms.ModelForm):
     draw_date = forms.DateField(
         label="Fecha de sorteo",
         required=True,
-        widget=forms.DateInput(attrs={"type": "date"}),
+        widget=forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
         help_text="Selecciona solo la fecha. La hora se guarda automáticamente.",
     )
     finished_at = forms.DateField(
         label="Fecha de finalización",
         required=False,
-        widget=forms.DateInput(attrs={"type": "date"}),
+        widget=forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
         help_text="Opcional. Selecciona solo la fecha. La hora se guarda automáticamente.",
     )
 
     class Meta:
         model = Raffle
         fields = "__all__"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # When editing an existing raffle, prefill date inputs from the stored datetimes.
+        # Otherwise, HTML5 date input can render blank and force re-entry.
+        if getattr(self, "is_bound", False):
+            return
+        inst = getattr(self, "instance", None)
+        if not inst or not getattr(inst, "pk", None):
+            return
+        try:
+            dd = getattr(inst, "draw_date", None)
+            if dd:
+                try:
+                    self.initial.setdefault("draw_date", timezone.localtime(dd).date())
+                except Exception:
+                    self.initial.setdefault("draw_date", dd.date())
+        except Exception:
+            pass
+        try:
+            fa = getattr(inst, "finished_at", None)
+            if fa:
+                try:
+                    self.initial.setdefault("finished_at", timezone.localtime(fa).date())
+                except Exception:
+                    self.initial.setdefault("finished_at", fa.date())
+        except Exception:
+            pass
 
     def _date_to_dt_end_of_day(self, d):
         if not d:
