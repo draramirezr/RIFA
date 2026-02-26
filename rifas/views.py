@@ -255,10 +255,15 @@ def admin_raffle_calculator(request):
 
     if request.method == "POST" and form.is_valid():
         raffle: Raffle = form.cleaned_data["raffle"]
-        price = int(getattr(raffle, "price_per_ticket", 0) or 0)
-        if price <= 0:
-            form.add_error("raffle", "La rifa debe tener un precio por boleto mayor que 0.")
+        if not getattr(raffle, "is_active", True):
+            form.add_error("raffle", "Solo puedes calcular usando una rifa activa.")
         else:
+            price = int(getattr(raffle, "price_per_ticket", 0) or 0)
+            if price <= 0:
+                form.add_error("raffle", "La rifa debe tener un precio por boleto mayor que 0.")
+                price = 0
+
+        if not form.errors:
             product_cost = int(form.cleaned_data["product_cost"] or 0)
             shipping_cost = int(form.cleaned_data["shipping_cost"] or 0)
             advertising_cost = int(form.cleaned_data["advertising_cost"] or 0)

@@ -392,11 +392,11 @@ class AdminWinnerLookupForm(forms.Form):
 
 class AdminRaffleCalculatorForm(forms.Form):
     raffle = forms.ModelChoiceField(
-        queryset=Raffle.objects.all().order_by("-is_active", "-created_at"),
+        queryset=Raffle.objects.filter(is_active=True).order_by("-created_at"),
         required=True,
         empty_label=None,
         label="Rifa",
-        help_text="Incluye rifas activas e inactivas. Se usa el precio por boleto de la rifa.",
+        help_text="Solo muestra rifas activas. Se usa el precio por boleto de la rifa.",
     )
     product_cost = forms.IntegerField(min_value=0, label="Costo del producto (RD$)", initial=0)
     shipping_cost = forms.IntegerField(min_value=0, label="Envío (RD$)", initial=0)
@@ -424,14 +424,6 @@ class AdminRaffleCalculatorForm(forms.Form):
         )
 
         self.fields["raffle"].widget.attrs.setdefault("class", base_select)
-        try:
-            raffle_field = self.fields.get("raffle")
-            if raffle_field is not None:
-                raffle_field.label_from_instance = lambda obj: (
-                    f"{getattr(obj, 'title', '')} (Inactiva)" if not getattr(obj, "is_active", True) else f"{getattr(obj, 'title', '')}"
-                )
-        except Exception:
-            pass
         for k in ("product_cost", "shipping_cost", "advertising_cost", "other_costs", "desired_margin_percent"):
             self.fields[k].widget.attrs.setdefault("class", base_input)
         for k in ("product_cost", "shipping_cost", "advertising_cost", "other_costs"):
