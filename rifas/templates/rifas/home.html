@@ -50,6 +50,11 @@
                     <div class="mt-2 text-xs text-emerald-200">
                       La rifa se realiza cuando llegue al 100%.
                     </div>
+                    {% if raffle.draw_source_text %}
+                      <div class="text-xs gh-text-success" style="margin-top:2px;">
+                        {{ raffle.draw_source_text }}
+                      </div>
+                    {% endif %}
                   </div>
                 {% endif %}
 

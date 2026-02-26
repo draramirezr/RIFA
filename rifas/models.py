@@ -103,6 +103,12 @@ class Raffle(models.Model):
         default=True,
         help_text="Si está desactivado, no se mostrará la fecha del sorteo en la web.",
     )
+    draw_source_text = models.CharField(
+        "Texto de sorteo (lotería)",
+        max_length=280,
+        blank=True,
+        help_text="Texto opcional que se muestra debajo del 100% (ej: últimos 3 números de Pega 4, Lotería Real).",
+    )
     price_per_ticket = models.PositiveIntegerField(validators=[MinValueValidator(0)])
     max_tickets = models.PositiveIntegerField(null=True, blank=True, help_text="Opcional. Límite total de boletos.")
     min_purchase_quantity = models.PositiveIntegerField(

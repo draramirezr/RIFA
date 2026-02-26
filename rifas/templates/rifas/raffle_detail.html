@@ -112,6 +112,11 @@
             <div class="h-full rounded-full bg-emerald-400" style="width: {{ raffle.sold_percent }}%"></div>
           </div>
           <div class="mt-2 text-xs text-emerald-200">Esta rifa se realiza cuando llegue al 100%.</div>
+          {% if raffle.draw_source_text %}
+            <div class="text-xs gh-text-success" style="margin-top:2px;">
+              {{ raffle.draw_source_text }}
+            </div>
+          {% endif %}
         </div>
       {% endif %}
 
