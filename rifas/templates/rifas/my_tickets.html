@@ -27,15 +27,14 @@
             {% if form.raffle.errors %}<div class="mt-1 text-sm text-red-300">{{ form.raffle.errors }}</div>{% endif %}
           </div>
           <div>
-            <label class="block text-sm text-slate-300">Teléfono</label>
-            <div class="mt-1 grid grid-cols-3 gap-3">
+            <div class="grid grid-cols-3 gap-3">
               <div class="col-span-1">
-                <label for="{{ form.phone_prefix.id_for_label }}" class="sr-only">Prefijo</label>
-                {{ form.phone_prefix }}
+                <label for="{{ form.phone_prefix.id_for_label }}" class="block text-sm text-slate-300">Prefijo</label>
+                <div class="mt-1">{{ form.phone_prefix }}</div>
               </div>
               <div class="col-span-2">
-                <label for="{{ form.phone_number.id_for_label }}" class="sr-only">Número</label>
-                {{ form.phone_number }}
+                <label for="{{ form.phone_number.id_for_label }}" class="block text-sm text-slate-300">Teléfono</label>
+                <div class="mt-1">{{ form.phone_number }}</div>
               </div>
             </div>
             {% if form.phone_prefix.errors %}<div class="mt-1 text-sm text-red-300">{{ form.phone_prefix.errors }}</div>{% endif %}
