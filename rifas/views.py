@@ -558,6 +558,7 @@ def admin_raffle_closeout(request):
     """
     from datetime import datetime, time, timedelta
 
+    from django.contrib.auth import get_user_model
     from django.db.models import Count, OuterRef, Subquery, Sum, Value
     from django.db.models.functions import Coalesce
 
@@ -631,6 +632,28 @@ def admin_raffle_closeout(request):
             summary_rows.append(row)
             for k in totals:
                 totals[k] += int(row[k] or 0)
+
+        # Ensure all staff users appear, even with 0 totals.
+        # Purchases with missing audit events will show under "—".
+        try:
+            User = get_user_model()
+            staff_users = list(
+                User.objects.filter(is_active=True, is_staff=True).order_by("username").values_list("username", flat=True)
+            )
+            by_user = {r["user"]: r for r in summary_rows}
+            for u in staff_users:
+                u = (u or "").strip()
+                if not u:
+                    continue
+                if u not in by_user:
+                    by_user[u] = {"user": u, "purchases": 0, "paid_tickets": 0, "bonus_tickets": 0, "total_tickets": 0, "amount": 0}
+            # Keep "—" last; otherwise sort by amount desc then user.
+            summary_rows = sorted(
+                by_user.values(),
+                key=lambda x: (x["user"] == "—", -int(x.get("amount") or 0), -int(x.get("paid_tickets") or 0), str(x.get("user") or "")),
+            )
+        except Exception:
+            pass
 
         detail_rows = list(
             pqs.select_related("bank_account")
