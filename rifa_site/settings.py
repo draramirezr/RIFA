@@ -329,7 +329,9 @@ SITE_URL = (os.environ.get("SITE_URL", "") or "").strip().rstrip("/")
 # Where purchase proof notifications go (admin inbox)
 PURCHASE_NOTIFY_EMAIL = os.environ.get("PURCHASE_NOTIFY_EMAIL", "")
 SEND_PURCHASE_EMAILS = os.environ.get("SEND_PURCHASE_EMAILS", "0") == "1"
-SEND_CUSTOMER_EMAILS = os.environ.get("SEND_CUSTOMER_EMAILS", "0") == "1"
+# Customer purchase emails are safe (and expected) by default.
+# You can still disable them explicitly with SEND_CUSTOMER_EMAILS=0.
+SEND_CUSTOMER_EMAILS = os.environ.get("SEND_CUSTOMER_EMAILS", "1") == "1"
 SEND_WINNER_EMAILS = os.environ.get("SEND_WINNER_EMAILS", "1") == "1"
 
 # Default primary key field type

@@ -1,5 +1,10 @@
-{% extends "admin/index.html" %}
+{% extends "admin/base_site.html" %}
 {% load i18n %}
+
+{% block bodyclass %}{{ block.super }} dashboard{% endblock %}
+
+{# The admin index doesn't show breadcrumbs by default #}
+{% block breadcrumbs %}{% endblock %}
 
 {% block content %}
   {% if request.user.is_staff %}
@@ -27,6 +32,14 @@
     </div>
   {% endif %}
 
-  {{ block.super }}
+  <div id="content-main">
+    {% include "admin/app_list.html" with app_list=app_list show_changelinks=True %}
+  </div>
+{% endblock %}
+
+{% block sidebar %}
+  <div id="content-related">
+    {% include "admin/recent_actions.html" %}
+  </div>
 {% endblock %}
 

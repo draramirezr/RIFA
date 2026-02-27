@@ -4,13 +4,19 @@
 
 {% block content %}
   <div id="content-main">
-    <h1>{% translate "Rendimiento de rifa" %}</h1>
-
     <div class="module">
       <form method="post" novalidate>
         {% csrf_token %}
 
         <fieldset class="module aligned">
+          <div class="form-row">
+            <div>
+              <label for="{{ form.include_inactive.id_for_label }}">{{ form.include_inactive.label }}</label>
+              <div class="fieldBox">{{ form.include_inactive }}</div>
+              {% if form.include_inactive.errors %}{{ form.include_inactive.errors }}{% endif %}
+            </div>
+          </div>
+
           <div class="form-row">
             <div>
               <label for="{{ form.raffle.id_for_label }}">{{ form.raffle.label }}</label>
