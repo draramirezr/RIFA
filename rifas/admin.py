@@ -367,6 +367,7 @@ class PhonePrefixFilter(admin.SimpleListFilter):
 @admin.register(TicketPurchase)
 class TicketPurchaseAdmin(admin.ModelAdmin):
     list_display = (
+        "created_at",
         "id",
         "raffle",
         "full_name",
@@ -379,12 +380,12 @@ class TicketPurchaseAdmin(admin.ModelAdmin):
         "total_amount",
         "proof_link",
         "status",
-        "created_at",
     )
     list_filter = ("status", "raffle", "bank_account", PhonePrefixFilter)
     search_fields = ("full_name", "phone", "email", "raffle__title", "bank_account__bank_name", "bank_account__account_number")
     search_help_text = "Busca por teléfono, nombre, rifa o banco."
     list_select_related = ("raffle", "bank_account")
+    change_list_template = "admin/rifas/ticketpurchase/change_list.html"
     readonly_fields = (
         "created_at",
         "decided_at",
@@ -397,6 +398,13 @@ class TicketPurchaseAdmin(admin.ModelAdmin):
         "proof_preview",
     )
     actions = [approve_purchases, reject_purchases]
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        show_all = (request.GET.get("show_all") or "").strip() == "1"
+        if show_all:
+            return qs
+        return qs.filter(raffle__is_active=True)
 
     @admin.display(description="Promoción (vista previa)")
     def promo_preview(self, obj: TicketPurchase):
@@ -546,9 +554,9 @@ class SiteContentAdmin(admin.ModelAdmin):
 
 @admin.register(BankAccount)
 class BankAccountAdmin(admin.ModelAdmin):
-    list_display = ("bank_name", "account_number", "is_active", "sort_order")
+    list_display = ("bank_name", "owner_name", "account_number", "is_active", "sort_order")
     list_filter = ("is_active",)
-    search_fields = ("bank_name", "account_number")
+    search_fields = ("bank_name", "owner_name", "account_number")
 
 
 @admin.action(description="Exportar a Excel (.xlsx)")

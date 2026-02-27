@@ -1,0 +1,22 @@
+{% extends "admin/change_list.html" %}
+{% load i18n %}
+
+{% block content %}
+  <div class="module" style="margin-bottom: 12px;">
+    <form method="get" style="padding: 10px 12px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+      {% for k, v in request.GET.items %}
+        {% if k != "show_all" %}
+          <input type="hidden" name="{{ k }}" value="{{ v }}">
+        {% endif %}
+      {% endfor %}
+      <label style="display:flex; align-items:center; gap:8px; margin:0;">
+        <input type="checkbox" name="show_all" value="1"
+               {% if request.GET.show_all == "1" %}checked{% endif %}
+               onchange="this.form.submit()">
+        {% translate "Ver todas (incluye rifas inactivas)" %}
+      </label>
+    </form>
+  </div>
+  {{ block.super }}
+{% endblock %}
+

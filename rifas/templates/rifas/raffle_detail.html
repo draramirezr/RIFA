@@ -147,13 +147,13 @@
             <div class="font-semibold text-slate-100">Condiciones</div>
             <ul class="mt-2 list-disc pl-5 space-y-1">
               {% if raffle.min_purchase_quantity and raffle.min_purchase_quantity > 1 %}
-                <li>🎟 Compra mínima: {{ raffle.min_purchase_quantity }} boletos pagados.</li>
+                <li>🎟 Compra mínima: {{ raffle.min_purchase_quantity }} boletos.</li>
               {% endif %}
               {% if offer %}
                 {% if offer.min_paid_quantity and offer.min_paid_quantity > 1 %}
-                  <li>🎯 Para aplicar la promoción: mínimo {{ offer.min_paid_quantity }} boletos pagados.</li>
+                  <li>🎯 Para aplicar la promoción: mínimo {{ offer.min_paid_quantity }} boletos.</li>
                 {% endif %}
-                <li>🎁 Promoción: Por cada {{ offer.buy_quantity }} boletos pagados recibes {{ offer.bonus_quantity }} boleto gratis.</li>
+                <li>🎁 Promoción: Por cada {{ offer.buy_quantity }} boletos recibes {{ offer.bonus_quantity }} boleto gratis.</li>
               {% endif %}
             </ul>
           </div>

@@ -689,6 +689,12 @@ class SiteContent(models.Model):
 
 class BankAccount(models.Model):
     bank_name = models.CharField(max_length=80)
+    owner_name = models.CharField(
+        "Propietario / Titular",
+        max_length=120,
+        blank=True,
+        help_text="Nombre del titular de la cuenta (para distinguir cuentas de diferentes propietarios).",
+    )
     account_number = models.CharField(max_length=40)
     sort_order = models.PositiveIntegerField(default=0)
     is_active = models.BooleanField(default=True)
@@ -713,6 +719,9 @@ class BankAccount(models.Model):
         ordering = ["sort_order", "created_at"]
 
     def __str__(self) -> str:
+        owner = (self.owner_name or "").strip()
+        if owner:
+            return f"{self.bank_name} - {self.account_number} ({owner})"
         return f"{self.bank_name} - {self.account_number}"
 
     def clean(self):
