@@ -1,4 +1,4 @@
-from django.db import models, transaction
+from django.db import IntegrityError, models, transaction
 from django.core.validators import MinValueValidator
 from django.utils import timezone
 from django.utils.text import slugify
@@ -6,6 +6,7 @@ import secrets
 from django.core.exceptions import ValidationError
 from django.conf import settings
 import os
+import random
 
 from imagekit.models import ImageSpecField
 from imagekit.processors import ResizeToFill, ResizeToFit
@@ -415,36 +416,85 @@ class TicketPurchase(models.Model):
             return
 
         with transaction.atomic():
-            # Validate capacity
-            if self.raffle.max_tickets:
-                remaining = self.raffle.max_tickets - self.raffle.tickets.count()
+            # Lock the raffle row so two approvals can't assign same numbers concurrently.
+            raffle = Raffle.objects.select_for_update().get(pk=self.raffle_id)
+
+            existing = self.tickets.count()
+            needed = max(0, self.total_tickets - existing)
+            if needed <= 0:
+                return
+
+            max_tickets = int(getattr(raffle, "max_tickets", 0) or 0)
+
+            # If max_tickets is configured, assign RANDOM unique numbers from 1..max_tickets.
+            if max_tickets > 0:
+                # Fetch all assigned numbers for this raffle (unique constraint enforces no duplicates).
+                assigned = set(
+                    Ticket.objects.filter(raffle_id=self.raffle_id).values_list("number", flat=True)
+                )
+                remaining = max_tickets - len(assigned)
                 if remaining <= 0:
                     raise ValueError("No quedan boletos disponibles para esta rifa.")
-                if (self.total_tickets - self.tickets.count()) > remaining:
+                if needed > remaining:
                     raise ValueError("No hay suficientes boletos disponibles para completar esta compra.")
 
-            # Lock raffle tickets to avoid duplicate numbers under concurrency (MySQL/InnoDB).
+                def pick_numbers() -> list[int]:
+                    # Typical raffles are small (<= 10k). Build the available list and sample.
+                    if max_tickets <= 50000:
+                        avail = [i for i in range(1, max_tickets + 1) if i not in assigned]
+                        return random.sample(avail, needed)
+
+                    # Fallback for huge ranges: rejection sampling (guarded).
+                    chosen: set[int] = set()
+                    attempts = 0
+                    max_attempts = max(1000, needed * 80)
+                    while len(chosen) < needed and attempts < max_attempts:
+                        attempts += 1
+                        n = random.randint(1, max_tickets)
+                        if n in assigned or n in chosen:
+                            continue
+                        chosen.add(n)
+                    if len(chosen) < needed:
+                        # As a last resort, build list (may be heavy but guarantees progress).
+                        avail = [i for i in range(1, max_tickets + 1) if i not in assigned]
+                        return random.sample(avail, needed)
+                    return list(chosen)
+
+                # Best-effort retry in case of race (should be rare due to raffle lock).
+                last_err = None
+                for _ in range(3):
+                    nums = pick_numbers()
+                    to_create = [Ticket(raffle_id=self.raffle_id, purchase_id=self.id, number=n) for n in nums]
+                    try:
+                        Ticket.objects.bulk_create(to_create)
+                        break
+                    except IntegrityError as e:
+                        last_err = e
+                        # Another transaction created one of our numbers. Refresh assigned set and retry.
+                        assigned = set(
+                            Ticket.objects.filter(raffle_id=self.raffle_id).values_list("number", flat=True)
+                        )
+                        continue
+                else:
+                    raise ValueError("No se pudieron asignar boletos (intenta de nuevo).") from last_err
+
+                raffle.close_if_sold_out()
+                return
+
+            # If max_tickets is not set, keep the original sequential behavior.
             last = (
                 Ticket.objects.select_for_update()
-                .filter(raffle=self.raffle)
+                .filter(raffle_id=self.raffle_id)
                 .order_by("-number")
                 .first()
             )
             start = (last.number if last else 0) + 1
-            to_create = []
-            existing = self.tickets.count()
-            needed = max(0, self.total_tickets - existing)
-            for i in range(needed):
-                to_create.append(
-                    Ticket(
-                        raffle=self.raffle,
-                        purchase=self,
-                        number=start + i,
-                    )
-                )
+            to_create = [
+                Ticket(raffle_id=self.raffle_id, purchase_id=self.id, number=start + i)
+                for i in range(needed)
+            ]
             Ticket.objects.bulk_create(to_create)
-            # If this approval completes the raffle, close it.
-            self.raffle.close_if_sold_out()
+            raffle.close_if_sold_out()
 
     def apply_offer(self):
         offer = self.raffle.get_active_offer()
