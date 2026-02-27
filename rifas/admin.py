@@ -364,6 +364,23 @@ class PhonePrefixFilter(admin.SimpleListFilter):
         return queryset.filter(phone__startswith=val)
 
 
+class TicketPurchaseShowAllFilter(admin.SimpleListFilter):
+    """
+    We use this filter only so Django admin accepts the `show_all` GET param.
+    Otherwise, admin treats it as an unknown lookup and redirects to `?e=1`.
+    """
+
+    title = "Ver"
+    parameter_name = "show_all"
+
+    def lookups(self, request, model_admin):
+        return [("1", "Todas (incluye rifas inactivas)")]
+
+    def queryset(self, request, queryset):
+        # Actual behavior is enforced in ModelAdmin.get_queryset.
+        return queryset
+
+
 @admin.register(TicketPurchase)
 class TicketPurchaseAdmin(admin.ModelAdmin):
     list_display = (
@@ -381,7 +398,7 @@ class TicketPurchaseAdmin(admin.ModelAdmin):
         "proof_link",
         "status",
     )
-    list_filter = ("status", "raffle", "bank_account", PhonePrefixFilter)
+    list_filter = (TicketPurchaseShowAllFilter, "status", "raffle", "bank_account", PhonePrefixFilter)
     search_fields = ("full_name", "phone", "email", "raffle__title", "bank_account__bank_name", "bank_account__account_number")
     search_help_text = "Busca por teléfono, nombre, rifa o banco."
     list_select_related = ("raffle", "bank_account")
