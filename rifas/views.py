@@ -26,7 +26,7 @@ from .forms import (
     TicketPurchaseForm,
 )
 from .emails import send_customer_purchase_received, send_purchase_notification
-from .models import BankAccount, Raffle, SiteContent, Ticket, TicketPurchase, UserSecurity
+from .models import AuditEvent, BankAccount, Raffle, SiteContent, Ticket, TicketPurchase, UserSecurity
 
 
 PUBLIC_PAGE_CACHE_SECONDS = 60
