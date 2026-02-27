@@ -484,3 +484,57 @@ class AdminRafflePerformanceForm(forms.Form):
         self.fields["date_from"].widget.attrs.setdefault("class", base_input)
         self.fields["date_to"].widget.attrs.setdefault("class", base_input)
 
+
+class AdminRaffleCloseoutForm(forms.Form):
+    """
+    Admin report: accounting closeout per approver user.
+    """
+
+    include_inactive = forms.BooleanField(
+        required=False,
+        label="Incluir rifas inactivas",
+        help_text="Por defecto solo aparecen rifas activas en el selector.",
+    )
+    raffle = forms.ModelChoiceField(
+        queryset=Raffle.objects.filter(is_active=True).order_by("-created_at"),
+        required=True,
+        empty_label=None,
+        label="Rifa",
+    )
+    date_from = forms.DateField(
+        required=False,
+        label="Desde (opcional)",
+        help_text="Rango por fecha de aprobación (decisión).",
+        widget=forms.DateInput(attrs={"type": "date"}),
+    )
+    date_to = forms.DateField(
+        required=False,
+        label="Hasta (opcional)",
+        help_text="Si lo dejas vacío, se usa hoy.",
+        widget=forms.DateInput(attrs={"type": "date"}),
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        base_input = (
+            "w-full rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3 "
+            "text-slate-100 placeholder:text-slate-500 outline-none "
+            "focus:border-emerald-400/60 focus:ring-2 focus:ring-emerald-400/15"
+        )
+        base_select = (
+            "w-full rounded-xl border border-white/10 bg-slate-950/40 px-3 py-3 "
+            "text-slate-100 outline-none focus:border-emerald-400/60 focus:ring-2 focus:ring-emerald-400/15"
+        )
+        self.fields["raffle"].widget.attrs.setdefault("class", base_select)
+        self.fields["date_from"].widget.attrs.setdefault("class", base_input)
+        self.fields["date_to"].widget.attrs.setdefault("class", base_input)
+
+        # Default: only active raffles in dropdown. If include_inactive is checked, show all.
+        try:
+            data = self.data or {}
+            inc = str(data.get("include_inactive") or "").strip().lower() in ("1", "true", "on", "yes")
+        except Exception:
+            inc = False
+        if inc:
+            self.fields["raffle"].queryset = Raffle.objects.all().order_by("-created_at")
+

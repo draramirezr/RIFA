@@ -13,6 +13,7 @@ import secrets
 
 from .models import AuditEvent, BankAccount, Customer, Raffle, RaffleCalculation, RaffleImage, RaffleOffer, SiteContent, Ticket, TicketPurchase, UserSecurity
 from django.db import models
+from django.db.models import OuterRef, Subquery
 from datetime import datetime, time
 
 # Admin UI (Spanish)
@@ -396,6 +397,21 @@ class TicketShowAllFilter(admin.SimpleListFilter):
         return queryset
 
 
+class AuditEventShowAllFilter(admin.SimpleListFilter):
+    """
+    Accept `show_all` param on AuditEvent changelist.
+    """
+
+    title = "Ver"
+    parameter_name = "show_all"
+
+    def lookups(self, request, model_admin):
+        return [("1", "Todos (incluye rifas inactivas)")]
+
+    def queryset(self, request, queryset):
+        return queryset
+
+
 @admin.register(TicketPurchase)
 class TicketPurchaseAdmin(admin.ModelAdmin):
     list_display = (
@@ -668,7 +684,7 @@ class CustomerAdmin(admin.ModelAdmin):
 
 @admin.register(Ticket)
 class TicketAdmin(admin.ModelAdmin):
-    list_display = ("raffle", "number_display", "purchase", "created_at")
+    list_display = ("raffle", "number_display", "purchase", "approved_by", "created_at")
     change_list_template = "admin/rifas/ticket/change_list.html"
     list_filter = (TicketShowAllFilter, "raffle")
     search_fields = ("purchase__full_name", "purchase__phone", "purchase__email", "raffle__title")
@@ -678,6 +694,18 @@ class TicketAdmin(admin.ModelAdmin):
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
+
+        # Annotate who approved the purchase (latest approval audit event).
+        approved_by_sq = Subquery(
+            AuditEvent.objects.filter(
+                purchase_id=OuterRef("purchase_id"),
+                action=AuditEvent.Action.PURCHASE_APPROVED,
+            )
+            .order_by("-created_at")
+            .values("actor__username")[:1]
+        )
+        qs = qs.annotate(approved_by_annot=approved_by_sq)
+
         show_all = (request.GET.get("show_all") or "").strip() == "1"
         if show_all:
             return qs
@@ -698,6 +726,10 @@ class TicketAdmin(admin.ModelAdmin):
     @admin.display(description="Boleto")
     def number_display(self, obj: Ticket):
         return obj.display_number
+
+    @admin.display(description="Aprobado por")
+    def approved_by(self, obj: Ticket):
+        return (getattr(obj, "approved_by_annot", None) or "—")
 
     def get_search_results(self, request, queryset, search_term):
         qs, use_distinct = super().get_search_results(request, queryset, search_term)
@@ -752,7 +784,8 @@ class TicketAdmin(admin.ModelAdmin):
 @admin.register(AuditEvent)
 class AuditEventAdmin(admin.ModelAdmin):
     list_display = ("created_at", "action", "actor", "raffle", "purchase", "ticket", "from_status", "to_status", "ip")
-    list_filter = ("action", "created_at", "actor", "raffle")
+    change_list_template = "admin/rifas/auditevent/change_list.html"
+    list_filter = (AuditEventShowAllFilter, "action", "created_at", "actor", "raffle")
     search_fields = ("purchase__public_reference", "purchase__full_name", "purchase__phone", "purchase__email", "ip", "user_agent")
     readonly_fields = (
         "created_at",
@@ -779,6 +812,17 @@ class AuditEventAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        show_all = (request.GET.get("show_all") or "").strip() == "1"
+        if show_all:
+            return qs
+        # Default: hide inactive raffles, but keep events without a raffle.
+        try:
+            return qs.filter(models.Q(raffle__isnull=True) | models.Q(raffle__is_active=True))
+        except Exception:
+            return qs
 
 
 @admin.register(RaffleCalculation)

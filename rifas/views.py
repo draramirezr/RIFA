@@ -548,6 +548,179 @@ def admin_raffle_performance(request):
     return render(request, "admin/raffle_performance.html", ctx)
 
 
+@staff_member_required
+@require_http_methods(["GET", "POST"])
+def admin_raffle_closeout(request):
+    """
+    Admin report: accounting closeout per approver user, for a selected raffle.
+    - Counts paid tickets (quantity) and offer tickets (bonus_quantity, value 0)
+    - Amount is based on total_amount (paid tickets only)
+    """
+    from datetime import datetime, time, timedelta
+
+    from django.db.models import Count, OuterRef, Subquery, Sum, Value
+    from django.db.models.functions import Coalesce
+
+    from .forms import AdminRaffleCloseoutForm
+
+    ctx = admin_site.each_context(request)
+
+    submitted = request.method == "POST" or any(k in request.GET for k in ("raffle", "date_from", "date_to", "include_inactive"))
+    data = request.POST if request.method == "POST" else (request.GET if submitted else None)
+    form = AdminRaffleCloseoutForm(data or None)
+    result = None
+
+    if submitted and form.is_valid():
+        raffle: Raffle = form.cleaned_data["raffle"]
+        d_from = form.cleaned_data.get("date_from")
+        d_to = form.cleaned_data.get("date_to")
+
+        today = timezone.localdate()
+        if not d_to:
+            d_to = today
+        if d_from and d_from > d_to:
+            d_from, d_to = d_to, d_from
+
+        tz = timezone.get_current_timezone()
+        start_dt = timezone.make_aware(datetime.combine(d_from, time.min), tz) if d_from else None
+        end_dt = timezone.make_aware(datetime.combine(d_to + timedelta(days=1), time.min), tz)
+
+        # Base purchases: only APPROVED for the raffle.
+        pqs = TicketPurchase.objects.filter(
+            raffle=raffle,
+            status=TicketPurchase.Status.APPROVED,
+        )
+        if start_dt is not None:
+            pqs = pqs.filter(decided_at__gte=start_dt)
+        pqs = pqs.filter(decided_at__lt=end_dt)
+
+        # Annotate approver username/id from latest approval audit event for this purchase.
+        latest_ae = AuditEvent.objects.filter(
+            purchase_id=OuterRef("pk"),
+            action=AuditEvent.Action.PURCHASE_APPROVED,
+        ).order_by("-created_at")
+        pqs = pqs.annotate(
+            approved_by_id_annot=Subquery(latest_ae.values("actor_id")[:1]),
+            approved_by_username_annot=Subquery(latest_ae.values("actor__username")[:1]),
+        )
+
+        summary_qs = (
+            pqs.values("approved_by_id_annot", "approved_by_username_annot")
+            .annotate(
+                purchases=Coalesce(Count("id"), 0),
+                paid_tickets=Coalesce(Sum("quantity"), 0),
+                bonus_tickets=Coalesce(Sum("bonus_quantity"), 0),
+                total_tickets=Coalesce(Sum("total_tickets"), 0),
+                amount=Coalesce(Sum("total_amount"), 0),
+            )
+            .order_by("-amount", "-paid_tickets")
+        )
+
+        summary_rows = []
+        totals = {"purchases": 0, "paid_tickets": 0, "bonus_tickets": 0, "total_tickets": 0, "amount": 0}
+        for r in summary_qs:
+            user = (r.get("approved_by_username_annot") or "").strip() or "—"
+            row = {
+                "user": user,
+                "purchases": int(r.get("purchases") or 0),
+                "paid_tickets": int(r.get("paid_tickets") or 0),
+                "bonus_tickets": int(r.get("bonus_tickets") or 0),
+                "total_tickets": int(r.get("total_tickets") or 0),
+                "amount": int(r.get("amount") or 0),
+            }
+            summary_rows.append(row)
+            for k in totals:
+                totals[k] += int(row[k] or 0)
+
+        detail_rows = list(
+            pqs.select_related("bank_account")
+            .order_by("-decided_at", "-id")
+            .values(
+                "id",
+                "public_reference",
+                "full_name",
+                "phone",
+                "bank_account__bank_name",
+                "quantity",
+                "bonus_quantity",
+                "total_tickets",
+                "total_amount",
+                "decided_at",
+                "approved_by_username_annot",
+            )
+        )
+        for r in detail_rows:
+            r["approved_by_username_annot"] = (r.get("approved_by_username_annot") or "").strip() or "—"
+
+        result = {
+            "raffle": raffle,
+            "date_from": d_from,
+            "date_to": d_to,
+            "summary": summary_rows,
+            "totals": totals,
+            "detail": detail_rows,
+        }
+
+        if (request.GET.get("export") or request.POST.get("export") or "").strip() == "1":
+            try:
+                import openpyxl  # type: ignore
+            except Exception:
+                messages.error(request, "Falta openpyxl para exportar a Excel.")
+            else:
+                wb = openpyxl.Workbook()
+                ws1 = wb.active
+                ws1.title = "Resumen"
+                ws1.append(["Usuario", "Compras", "Boletos pagados", "Boletos oferta", "Total boletos", "Monto (RD$)"])
+                for row in summary_rows:
+                    ws1.append([row["user"], row["purchases"], row["paid_tickets"], row["bonus_tickets"], row["total_tickets"], row["amount"]])
+                ws1.append(["TOTAL", totals["purchases"], totals["paid_tickets"], totals["bonus_tickets"], totals["total_tickets"], totals["amount"]])
+
+                ws2 = wb.create_sheet("Detalle")
+                ws2.append(
+                    [
+                        "Compra ID",
+                        "Código",
+                        "Aprobado por",
+                        "Aprobado (fecha)",
+                        "Cliente",
+                        "Teléfono",
+                        "Banco",
+                        "Pagados",
+                        "Oferta",
+                        "Total boletos",
+                        "Monto (RD$)",
+                    ]
+                )
+                for r in detail_rows:
+                    decided = r.get("decided_at")
+                    ws2.append(
+                        [
+                            r.get("id"),
+                            r.get("public_reference") or "",
+                            r.get("approved_by_username_annot") or "",
+                            decided.isoformat(sep=" ", timespec="seconds") if decided else "",
+                            r.get("full_name") or "",
+                            r.get("phone") or "",
+                            r.get("bank_account__bank_name") or "",
+                            int(r.get("quantity") or 0),
+                            int(r.get("bonus_quantity") or 0),
+                            int(r.get("total_tickets") or 0),
+                            int(r.get("total_amount") or 0),
+                        ]
+                    )
+
+                resp = HttpResponse(
+                    content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+                safe_title = (getattr(raffle, "title", "") or "rifa").strip().replace("/", "-").replace("\\", "-")[:60]
+                resp["Content-Disposition"] = f'attachment; filename="cierre_contable_{safe_title}.xlsx"'
+                wb.save(resp)
+                return resp
+
+    ctx.update({"title": "Cierre contable de rifa", "form": form, "result": result})
+    return render(request, "admin/raffle_closeout.html", ctx)
+
+
 @cache_page(PUBLIC_PAGE_CACHE_SECONDS)
 def terms(request):
     return render(request, "rifas/terms.html", {})

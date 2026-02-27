@@ -1,0 +1,157 @@
+{% extends "admin/base_site.html" %}
+{% load i18n humanize %}
+
+{% block content %}
+  <div id="content-main">
+    <h1>{% translate "Cierre contable de rifa" %}</h1>
+
+    <div class="module">
+      <form method="get" novalidate>
+        <fieldset class="module aligned">
+          <div class="form-row">
+            <div>
+              <label for="{{ form.include_inactive.id_for_label }}">{{ form.include_inactive.label }}</label>
+              <div class="fieldBox">{{ form.include_inactive }}</div>
+              {% if form.include_inactive.help_text %}<div class="help">{{ form.include_inactive.help_text }}</div>{% endif %}
+              {% if form.include_inactive.errors %}{{ form.include_inactive.errors }}{% endif %}
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div>
+              <label for="{{ form.raffle.id_for_label }}">{{ form.raffle.label }}</label>
+              <div class="fieldBox">{{ form.raffle }}</div>
+              {% if form.raffle.errors %}{{ form.raffle.errors }}{% endif %}
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div>
+              <label for="{{ form.date_from.id_for_label }}">{{ form.date_from.label }}</label>
+              <div class="fieldBox">{{ form.date_from }}</div>
+              {% if form.date_from.help_text %}<div class="help">{{ form.date_from.help_text }}</div>{% endif %}
+              {% if form.date_from.errors %}{{ form.date_from.errors }}{% endif %}
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div>
+              <label for="{{ form.date_to.id_for_label }}">{{ form.date_to.label }}</label>
+              <div class="fieldBox">{{ form.date_to }}</div>
+              {% if form.date_to.help_text %}<div class="help">{{ form.date_to.help_text }}</div>{% endif %}
+              {% if form.date_to.errors %}{{ form.date_to.errors }}{% endif %}
+            </div>
+          </div>
+        </fieldset>
+
+        <div class="submit-row">
+          <input type="submit" value="{% translate 'Ver reporte' %}" class="default">
+          {% if result %}
+            <a class="button" style="margin-left: 8px;"
+               href="?{% for k,v in request.GET.items %}{% if k != 'export' %}{{ k|urlencode }}={{ v|urlencode }}&{% endif %}{% endfor %}export=1">
+              {% translate "Descargar Excel" %}
+            </a>
+          {% endif %}
+        </div>
+      </form>
+    </div>
+
+    {% if result %}
+      <p class="help" style="margin-top: 6px;">
+        {% translate "Solo incluye compras APROBADAS." %}
+        {% translate "Boletos por oferta (gratis) cuentan en boletos, pero su valor es 0." %}
+        <br>
+        {% translate "Rifa:" %} <b>{{ result.raffle }}</b>
+        {% if result.date_from %}| {% translate "Desde:" %} <b>{{ result.date_from|date:"d/m/Y" }}</b>{% endif %}
+        | {% translate "Hasta:" %} <b>{{ result.date_to|date:"d/m/Y" }}</b>
+      </p>
+
+      <div class="module">
+        <h2>{% translate "Resumen por usuario" %}</h2>
+        <div style="overflow-x:auto; -webkit-overflow-scrolling: touch;">
+          <table style="width:100%; min-width: 860px;">
+            <thead>
+              <tr>
+                <th>{% translate "Usuario" %}</th>
+                <th style="text-align:right;">{% translate "Compras" %}</th>
+                <th style="text-align:right;">{% translate "Boletos pagados" %}</th>
+                <th style="text-align:right;">{% translate "Boletos oferta" %}</th>
+                <th style="text-align:right;">{% translate "Total boletos" %}</th>
+                <th style="text-align:right;">{% translate "Monto (RD$)" %}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in result.summary %}
+                <tr>
+                  <td><b>{{ r.user }}</b></td>
+                  <td style="text-align:right;">{{ r.purchases|intcomma }}</td>
+                  <td style="text-align:right;">{{ r.paid_tickets|intcomma }}</td>
+                  <td style="text-align:right;">{{ r.bonus_tickets|intcomma }}</td>
+                  <td style="text-align:right;">{{ r.total_tickets|intcomma }}</td>
+                  <td style="text-align:right;"><b>{{ r.amount|intcomma }}</b></td>
+                </tr>
+              {% empty %}
+                <tr>
+                  <td colspan="6">{% translate "No hay datos en ese rango." %}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+            <tfoot>
+              <tr>
+                <th>{% translate "TOTAL" %}</th>
+                <th style="text-align:right;">{{ result.totals.purchases|intcomma }}</th>
+                <th style="text-align:right;">{{ result.totals.paid_tickets|intcomma }}</th>
+                <th style="text-align:right;">{{ result.totals.bonus_tickets|intcomma }}</th>
+                <th style="text-align:right;">{{ result.totals.total_tickets|intcomma }}</th>
+                <th style="text-align:right;">{{ result.totals.amount|intcomma }}</th>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+
+      <div class="module">
+        <h2>{% translate "Detalle" %}</h2>
+        <div style="overflow-x:auto; -webkit-overflow-scrolling: touch;">
+          <table style="width:100%; min-width: 1100px;">
+            <thead>
+              <tr>
+                <th>{% translate "Fecha" %}</th>
+                <th>{% translate "Aprobado por" %}</th>
+                <th>{% translate "Código" %}</th>
+                <th>{% translate "Cliente" %}</th>
+                <th>{% translate "Teléfono" %}</th>
+                <th>{% translate "Banco" %}</th>
+                <th style="text-align:right;">{% translate "Pagados" %}</th>
+                <th style="text-align:right;">{% translate "Oferta" %}</th>
+                <th style="text-align:right;">{% translate "Total" %}</th>
+                <th style="text-align:right;">{% translate "Monto (RD$)" %}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in result.detail %}
+                <tr>
+                  <td>{{ r.decided_at|date:"d/m/Y" }}</td>
+                  <td>{{ r.approved_by_username_annot }}</td>
+                  <td>{{ r.public_reference }}</td>
+                  <td>{{ r.full_name }}</td>
+                  <td>{{ r.phone }}</td>
+                  <td>{{ r.bank_account__bank_name|default:"—" }}</td>
+                  <td style="text-align:right;">{{ r.quantity|intcomma }}</td>
+                  <td style="text-align:right;">{{ r.bonus_quantity|intcomma }}</td>
+                  <td style="text-align:right;">{{ r.total_tickets|intcomma }}</td>
+                  <td style="text-align:right;"><b>{{ r.total_amount|intcomma }}</b></td>
+                </tr>
+              {% empty %}
+                <tr>
+                  <td colspan="10">{% translate "No hay compras aprobadas en ese rango." %}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    {% endif %}
+  </div>
+{% endblock %}
+
