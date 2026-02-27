@@ -3,7 +3,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 from django import forms
 from django.core.exceptions import ValidationError
-from django.http import HttpResponse
+from django.http import HttpResponse, HttpResponseRedirect
 from django.utils.html import format_html
 from django.utils import timezone
 from django.utils.timezone import make_aware
@@ -434,6 +434,17 @@ class TicketPurchaseAdmin(admin.ModelAdmin):
         except Exception:
             pass
         return qs.none()
+
+    def changelist_view(self, request, extra_context=None):
+        """
+        Default admin view: show pending purchases first.
+        If the user already selected a status filter (or any status__exact), do not override.
+        """
+        if request.method == "GET" and "status__exact" not in request.GET:
+            params = request.GET.copy()
+            params["status__exact"] = TicketPurchase.Status.PENDING
+            return HttpResponseRedirect(f"{request.path}?{params.urlencode()}")
+        return super().changelist_view(request, extra_context=extra_context)
 
     @admin.display(description="Promoción (vista previa)")
     def promo_preview(self, obj: TicketPurchase):
