@@ -105,7 +105,7 @@
 
               {% if offer %}
                 <div class="mt-3 rounded-lg border border-emerald-500/15 bg-emerald-500/10 p-3 text-sm text-emerald-200">
-                  Promoción activa: por cada <b>{{ offer.buy_quantity }}</b> pagados recibes <b>{{ offer.bonus_quantity }}</b> gratis.
+                  Promoción activa: por cada <b>{{ offer.buy_quantity }}</b> boletos recibes <b>{{ offer.bonus_quantity }}</b> gratis.
                   <div class="mt-1 text-xs text-emerald-200/80">
                     Gratis: <b><span id="bonus">0</span></b> boletos.
                   </div>
@@ -196,13 +196,14 @@
         <div class="text-lg font-semibold">Métodos de pago</div>
         {% if form.bank_account.errors %}<div class="mt-2 text-sm text-red-300">{{ form.bank_account.errors }}</div>{% endif %}
         {% if bank_accounts %}
-          <div class="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-4">
+          <div class="mt-4 grid grid-cols-4 gap-2 justify-items-center">
             {% for b in bank_accounts %}
               <button type="button"
                       class="bankBtn group flex h-12 w-12 items-center justify-center rounded-xl border border-white/10 bg-slate-950/40 hover:bg-slate-950/60 sm:h-14 sm:w-14"
                       data-bank-id="{{ b.id }}"
                       data-bank="{{ b.bank_name }}"
                       data-account="{{ b.account_number }}"
+                      data-owner="{{ b.owner_name|default:site.payment_holder_name }}"
                       {% if forloop.first %}data-default="1"{% endif %}>
                 {% if b.logo %}
                   <img src="{{ b.logo_icon.url }}" alt="{{ b.bank_name }}" class="h-full w-full p-2 object-contain" />
@@ -222,7 +223,7 @@
             <div class="mt-4 grid grid-cols-1 gap-3 text-sm">
               <div class="flex items-center justify-between">
                 <span class="text-slate-400">Titular</span>
-                <span class="text-slate-100 font-semibold">{{ site.payment_holder_name }}</span>
+                <span id="bankOwner" class="text-slate-100 font-semibold">—</span>
               </div>
               <div class="flex items-center justify-between">
                 <span class="text-slate-400">Tipo</span>
@@ -365,6 +366,7 @@
       const btns = Array.from(document.querySelectorAll(".bankBtn"));
       const bankName = document.getElementById("bankName");
       const bankAccount = document.getElementById("bankAccount");
+      const bankOwner = document.getElementById("bankOwner");
       const copyBtn = document.getElementById("copyAccount");
       const copyMsg = document.getElementById("copyMsg");
       const bankInput = document.getElementById("id_bank_account");
@@ -376,6 +378,7 @@
         btn.classList.add("ring-2","ring-emerald-400/40","border-emerald-400/40");
         bankName.textContent = btn.dataset.bank || "—";
         bankAccount.textContent = btn.dataset.account || "—";
+        if (bankOwner) bankOwner.textContent = (btn.dataset.owner || "").trim() || "—";
         if (bankInput) bankInput.value = btn.dataset.bankId || "";
         if (copyMsg) copyMsg.classList.add("hidden");
       }

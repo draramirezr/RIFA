@@ -404,7 +404,19 @@ class TicketPurchaseAdmin(admin.ModelAdmin):
         show_all = (request.GET.get("show_all") or "").strip() == "1"
         if show_all:
             return qs
-        return qs.filter(raffle__is_active=True)
+        # Default: show purchases for the active raffle only (fast FK filter).
+        try:
+            active = (
+                Raffle.objects.filter(is_active=True)
+                .order_by("-created_at")
+                .only("id")
+                .first()
+            )
+            if active and getattr(active, "id", None):
+                return qs.filter(raffle_id=active.id)
+        except Exception:
+            pass
+        return qs.none()
 
     @admin.display(description="Promoción (vista previa)")
     def promo_preview(self, obj: TicketPurchase):
