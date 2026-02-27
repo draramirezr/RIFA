@@ -381,10 +381,27 @@ class TicketPurchaseShowAllFilter(admin.SimpleListFilter):
         return queryset
 
 
+class TicketShowAllFilter(admin.SimpleListFilter):
+    """
+    Accept `show_all` param on Ticket changelist.
+    """
+
+    title = "Ver"
+    parameter_name = "show_all"
+
+    def lookups(self, request, model_admin):
+        return [("1", "Todos (incluye rifas inactivas)")]
+
+    def queryset(self, request, queryset):
+        return queryset
+
+
 @admin.register(TicketPurchase)
 class TicketPurchaseAdmin(admin.ModelAdmin):
     list_display = (
         "created_at",
+        "proof_link",
+        "status",
         "id",
         "raffle",
         "full_name",
@@ -395,8 +412,6 @@ class TicketPurchaseAdmin(admin.ModelAdmin):
         "bonus_quantity",
         "total_tickets",
         "total_amount",
-        "proof_link",
-        "status",
     )
     list_filter = (TicketPurchaseShowAllFilter, "status", "raffle", "bank_account", PhonePrefixFilter)
     search_fields = ("full_name", "phone", "email", "raffle__title", "bank_account__bank_name", "bank_account__account_number")
@@ -654,11 +669,31 @@ class CustomerAdmin(admin.ModelAdmin):
 @admin.register(Ticket)
 class TicketAdmin(admin.ModelAdmin):
     list_display = ("raffle", "number_display", "purchase", "created_at")
-    list_filter = ("raffle",)
+    change_list_template = "admin/rifas/ticket/change_list.html"
+    list_filter = (TicketShowAllFilter, "raffle")
     search_fields = ("purchase__full_name", "purchase__phone", "purchase__email", "raffle__title")
     list_select_related = ("raffle", "purchase")
     readonly_fields = ("number_display", "created_at")
     fields = ("raffle", "purchase", "number", "number_display", "created_at")
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        show_all = (request.GET.get("show_all") or "").strip() == "1"
+        if show_all:
+            return qs
+        # Default: show tickets for the active raffle only.
+        try:
+            active = (
+                Raffle.objects.filter(is_active=True)
+                .order_by("-created_at")
+                .only("id")
+                .first()
+            )
+            if active and getattr(active, "id", None):
+                return qs.filter(raffle_id=active.id)
+        except Exception:
+            pass
+        return qs.none()
 
     @admin.display(description="Boleto")
     def number_display(self, obj: Ticket):
