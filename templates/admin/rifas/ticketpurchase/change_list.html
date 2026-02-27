@@ -5,7 +5,8 @@
   <div class="module" style="margin-bottom: 12px;">
     <form method="get" style="padding: 10px 12px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
       {% for k, v in request.GET.items %}
-        {% if k != "show_all" %}
+        {# Do not carry admin error flag param "e" when toggling filters #}
+        {% if k != "show_all" and k != "e" %}
           <input type="hidden" name="{{ k }}" value="{{ v }}">
         {% endif %}
       {% endfor %}
