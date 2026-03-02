@@ -19,6 +19,9 @@
             <div class="text-slate-400">Código de compra</div>
             <div class="mt-1 font-semibold text-slate-100">{{ purchase.public_reference }}</div>
             <div class="mt-1 text-xs text-slate-400">Úsalo en “Mis boletos”.</div>
+            <div class="mt-2 text-xs text-slate-300">
+              Esta información fue enviada a tu correo{% if purchase.email %} <span class="font-semibold text-slate-100">{{ purchase.email }}</span>{% endif %}.
+            </div>
           </div>
           <button type="button" id="copyRef"
                   class="h-fit rounded-xl bg-white/10 px-3 py-2 text-sm font-semibold text-white hover:bg-white/15">
