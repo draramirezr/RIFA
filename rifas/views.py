@@ -847,6 +847,23 @@ def _mask_phone_last4(phone: str) -> str:
     return digits[:-4] + "****"
 
 
+def _mask_email_last4_before_at(email: str) -> str:
+    e = (email or "").strip()
+    if not e:
+        return ""
+    if "@" not in e:
+        # Fallback: mask last 4 characters.
+        if len(e) <= 4:
+            return "*" * len(e)
+        return e[:-4] + "****"
+    local, domain = e.split("@", 1)
+    if not local:
+        return "****@" + domain
+    if len(local) <= 4:
+        return ("*" * len(local)) + "@" + domain
+    return local[:-4] + "****@" + domain
+
+
 @staff_member_required
 @require_http_methods(["GET", "POST"])
 def admin_winner_search(request):
@@ -869,12 +886,15 @@ def admin_winner_search(request):
         for t in qs.order_by("-created_at")[:50]:
             p = t.purchase
             phone = getattr(p, "phone", "") or ""
+            email = getattr(p, "email", "") or ""
             results.append(
                 {
                     "ticket": t,
                     "purchase": p,
                     "masked_phone": _mask_phone_last4(phone),
                     "full_phone": phone,
+                    "masked_email": _mask_email_last4_before_at(email),
+                    "full_email": email,
                 }
             )
 

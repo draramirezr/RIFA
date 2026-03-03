@@ -3,8 +3,6 @@
 
 {% block content %}
   <div id="content-main">
-    <h1>{% translate "Buscar boleto ganador" %}</h1>
-
     <div class="module">
       <form method="post" novalidate>
         {% csrf_token %}
@@ -64,7 +62,12 @@
                     </a>
                   </td>
                   <td>{{ r.purchase.full_name }}</td>
-                  <td>{{ r.purchase.email }}</td>
+                  <td>
+                    <span class="masked-email" data-full="{{ r.full_email|escape }}">{{ r.masked_email }}</span>
+                    <button type="button" class="button reveal-email" style="margin-left:6px;">
+                      {% translate "Ver" %}
+                    </button>
+                  </td>
                   <td>
                     <span class="masked-phone" data-full="{{ r.full_phone|escape }}">{{ r.masked_phone }}</span>
                     <button type="button" class="button reveal-phone" style="margin-left:6px;">
@@ -106,6 +109,29 @@
             const wrap = btn.closest("td");
             if (!wrap) return;
             const span = wrap.querySelector(".masked-phone");
+            if (!span) return;
+            const full = span.getAttribute("data-full") || "";
+            const masked = span.getAttribute("data-masked") || span.textContent || "";
+
+            const showing = span.getAttribute("data-showing") === "1";
+            if (showing) {
+              span.textContent = masked;
+              span.setAttribute("data-showing", "0");
+              btn.textContent = "{% translate 'Ver' %}";
+            } else {
+              span.setAttribute("data-masked", masked);
+              span.textContent = full;
+              span.setAttribute("data-showing", "1");
+              btn.textContent = "{% translate 'Ocultar' %}";
+            }
+          });
+        });
+
+        document.querySelectorAll(".reveal-email").forEach(function (btn) {
+          btn.addEventListener("click", function () {
+            const wrap = btn.closest("td");
+            if (!wrap) return;
+            const span = wrap.querySelector(".masked-email");
             if (!span) return;
             const full = span.getAttribute("data-full") || "";
             const masked = span.getAttribute("data-masked") || span.textContent || "";

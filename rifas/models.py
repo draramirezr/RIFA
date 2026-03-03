@@ -145,6 +145,11 @@ class Raffle(models.Model):
         default=True,
         help_text="Si está desactivado, esta rifa no se mostrará en el historial público.",
     )
+    show_in_my_tickets_search = models.BooleanField(
+        "Mostrar en Mis boletos",
+        default=True,
+        help_text="Si está desactivado, esta rifa no aparecerá en el selector de la página “Mis boletos”.",
+    )
     finished_at = models.DateTimeField(
         null=True,
         blank=True,

@@ -289,7 +289,7 @@ class TicketPurchaseForm(forms.ModelForm):
 
 class TicketLookupForm(forms.Form):
     raffle = forms.ModelChoiceField(
-        queryset=Raffle.objects.all().order_by("-created_at"),
+        queryset=Raffle.objects.filter(show_in_my_tickets_search=True).order_by("-created_at"),
         empty_label="Selecciona una rifa",
     )
     phone_prefix = forms.ChoiceField(choices=PHONE_PREFIX_CHOICES, label="Prefijo")

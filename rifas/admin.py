@@ -110,6 +110,22 @@ class RaffleAdminForm(forms.ModelForm):
         return self._date_to_dt_end_of_day(d) if d else None
 
 
+class RaffleShowAllFilter(admin.SimpleListFilter):
+    """
+    Accept `show_all` param on Raffle changelist so admin doesn't redirect to `?e=1`.
+    UI checkbox is injected via change_list_template (same pattern as TicketPurchase).
+    """
+
+    title = "Ver"
+    parameter_name = "show_all"
+
+    def lookups(self, request, model_admin):
+        return [("1", "Todas (incluye rifas inactivas)")]
+
+    def queryset(self, request, queryset):
+        return queryset
+
+
 @admin.register(Raffle)
 class RaffleAdmin(admin.ModelAdmin):
     form = RaffleAdminForm
@@ -121,17 +137,28 @@ class RaffleAdmin(admin.ModelAdmin):
         "ticket_counter",
         "is_active",
         "show_in_history",
+        "show_in_my_tickets_search",
         "created_at",
     )
-    list_filter = ("is_active", "show_in_history", "show_draw_date")
+    list_filter = (RaffleShowAllFilter, "is_active", "show_in_history", "show_in_my_tickets_search", "show_draw_date")
     search_fields = ("title", "slug")
     prepopulated_fields = {"slug": ("title",)}
     inlines = [RaffleImageInline, RaffleOfferInline]
     actions = ["show_in_history_action", "hide_from_history_action"]
+    change_list_template = "admin/rifas/raffle/change_list.html"
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
-        return qs.annotate(sold_tickets_annot=models.Count("tickets")).prefetch_related("offers")
+        qs = qs.annotate(sold_tickets_annot=models.Count("tickets")).prefetch_related("offers")
+
+        show_all = (request.GET.get("show_all") or "").strip() == "1"
+        if show_all:
+            return qs
+
+        # Default: show only active raffles unless user explicitly filters is_active.
+        if "is_active__exact" not in request.GET:
+            return qs.filter(is_active=True)
+        return qs
 
     @admin.action(description="Mostrar en historial")
     def show_in_history_action(self, request, queryset):
@@ -647,7 +674,7 @@ def export_customers_xlsx(modeladmin, request, queryset):
     ws.title = "Clientes"
 
     # Export only customer profile data (no purchase metrics)
-    headers = ["Nombre", "Teléfono", "Email", "Creado", "Actualizado"]
+    headers = ["Nombre", "Teléfono", "Email"]
     ws.append(headers)
 
     for c in queryset.order_by("-last_purchase_at", "-updated_at").iterator(chunk_size=1000):
@@ -656,8 +683,6 @@ def export_customers_xlsx(modeladmin, request, queryset):
                 c.full_name,
                 c.phone,
                 c.email,
-                c.created_at.isoformat(sep=" ", timespec="seconds") if c.created_at else "",
-                c.updated_at.isoformat(sep=" ", timespec="seconds") if c.updated_at else "",
             ]
         )
 
@@ -671,15 +696,45 @@ def export_customers_xlsx(modeladmin, request, queryset):
 
 @admin.register(Customer)
 class CustomerAdmin(admin.ModelAdmin):
-    list_display = ("full_name", "phone", "email", "created_at", "updated_at")
+    list_display = ("full_name", "phone", "email")
     search_fields = ("full_name", "phone", "email")
-    list_filter = ("created_at",)
     actions = [export_customers_xlsx]
+    ordering = ("-last_purchase_at", "-updated_at", "-id")
+    readonly_fields = (
+        "first_purchase_at",
+        "last_purchase_at",
+        "total_purchases",
+        "total_paid_tickets",
+        "total_bonus_tickets",
+        "total_amount",
+    )
+    fields = (
+        "full_name",
+        "phone",
+        "email",
+        "first_purchase_at",
+        "last_purchase_at",
+        "total_purchases",
+        "total_paid_tickets",
+        "total_bonus_tickets",
+        "total_amount",
+    )
 
     def has_add_permission(self, request):
         # Customers are created/updated automatically from purchases.
         # Hide "Añadir cliente" to avoid confusion.
         return False
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        # Defensive: if legacy data ever created duplicate rows with the same phone,
+        # show only the most recently updated one per phone.
+        latest_id_sq = (
+            Customer.objects.filter(phone=OuterRef("phone"))
+            .order_by("-updated_at", "-id")
+            .values("id")[:1]
+        )
+        return qs.annotate(latest_id_annot=Subquery(latest_id_sq)).filter(id=models.F("latest_id_annot"))
 
 
 @admin.register(Ticket)
