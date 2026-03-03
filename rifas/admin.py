@@ -24,6 +24,39 @@ admin.site.index_title = "Panel de administración"
 admin.site.enable_nav_sidebar = True
 
 
+def _clean_invalid_raffle_id_filter(request) -> HttpResponseRedirect | None:
+    """
+    Django admin will show: 'Rifa con el ID “X” no existe' when a changelist receives an
+    invalid related filter value like raffle__id__exact=X.
+    This happens often due to preserved filters or copied URLs.
+    If the ID does not exist, remove it and reload.
+    """
+    if request.method != "GET":
+        return None
+    try:
+        raw = (request.GET.get("raffle__id__exact") or "").strip()
+        if not raw:
+            return None
+        rid = int(raw)
+        if rid <= 0:
+            return None
+    except Exception:
+        return None
+    try:
+        if Raffle.objects.filter(id=rid).exists():
+            return None
+    except Exception:
+        return None
+    try:
+        params = request.GET.copy()
+        params.pop("raffle__id__exact", None)
+        # Drop admin error flag param "e" if it was added.
+        params.pop("e", None)
+        return HttpResponseRedirect(f"{request.path}?{params.urlencode()}" if params else request.path)
+    except Exception:
+        return None
+
+
 class RaffleOfferInline(admin.TabularInline):
     model = RaffleOffer
     extra = 0
@@ -527,6 +560,9 @@ class TicketPurchaseAdmin(admin.ModelAdmin):
         Default admin view: show pending purchases first.
         If the user already selected a status filter (or any status__exact), do not override.
         """
+        cleaned = _clean_invalid_raffle_id_filter(request)
+        if cleaned is not None:
+            return cleaned
         if request.method == "GET" and "status__exact" not in request.GET:
             params = request.GET.copy()
             params["status__exact"] = TicketPurchase.Status.PENDING
@@ -776,6 +812,12 @@ class TicketAdmin(admin.ModelAdmin):
     readonly_fields = ("number_display", "created_at")
     fields = ("raffle", "purchase", "number", "number_display", "created_at")
 
+    def changelist_view(self, request, extra_context=None):
+        cleaned = _clean_invalid_raffle_id_filter(request)
+        if cleaned is not None:
+            return cleaned
+        return super().changelist_view(request, extra_context=extra_context)
+
     def get_queryset(self, request):
         qs = super().get_queryset(request)
 
@@ -886,6 +928,12 @@ class AuditEventAdmin(admin.ModelAdmin):
         "user_agent",
     )
     fields = readonly_fields
+
+    def changelist_view(self, request, extra_context=None):
+        cleaned = _clean_invalid_raffle_id_filter(request)
+        if cleaned is not None:
+            return cleaned
+        return super().changelist_view(request, extra_context=extra_context)
 
     def has_add_permission(self, request):
         return False
