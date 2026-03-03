@@ -147,6 +147,35 @@ class RaffleAdmin(admin.ModelAdmin):
     actions = ["show_in_history_action", "hide_from_history_action"]
     change_list_template = "admin/rifas/raffle/change_list.html"
 
+    def changelist_view(self, request, extra_context=None):
+        """
+        Be defensive with preserved/foreign filters in querystring.
+        If the user navigates here from another changelist, Django may carry
+        `_changelist_filters` or unrelated lookups that can trigger
+        "Rifa con el ID ... no existe" warnings. Strip those for this page.
+        """
+        if request.method == "GET":
+            try:
+                params = request.GET.copy()
+                changed = False
+
+                # Drop preserved filters from other changelists (not applicable here).
+                if "_changelist_filters" in params:
+                    params.pop("_changelist_filters", None)
+                    changed = True
+
+                # Drop any stray lookups referencing a `raffle` FK (this model has no such field).
+                for k in list(params.keys()):
+                    if k.startswith("raffle__"):
+                        params.pop(k, None)
+                        changed = True
+
+                if changed:
+                    return HttpResponseRedirect(f"{request.path}?{params.urlencode()}" if params else request.path)
+            except Exception:
+                pass
+        return super().changelist_view(request, extra_context=extra_context)
+
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         qs = qs.annotate(sold_tickets_annot=models.Count("tickets")).prefetch_related("offers")
