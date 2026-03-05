@@ -79,12 +79,12 @@ def raffle_detail(request, slug: str):
         )
     except Http404:
         return render(request, "rifas/not_found.html", status=404)
-    offer = raffle.get_active_offer()
-    show_conditions = (raffle.min_purchase_quantity and raffle.min_purchase_quantity > 1) or bool(offer)
+    offers = list(raffle.get_active_offers())
+    show_conditions = (raffle.min_purchase_quantity and raffle.min_purchase_quantity > 1) or bool(offers)
     return render(
         request,
         "rifas/raffle_detail.html",
-        {"raffle": raffle, "offer": offer, "show_conditions": show_conditions},
+        {"raffle": raffle, "offers": offers, "show_conditions": show_conditions},
     )
 
 
@@ -94,7 +94,15 @@ def buy_ticket(request, slug: str):
     if raffle.is_sold_out:
         return render(request, "rifas/sold_out.html", {"raffle": raffle}, status=403)
 
-    offer = raffle.get_active_offer()
+    offers = list(raffle.get_active_offers())
+    offers_data = [
+        {
+            "buy": int(getattr(o, "buy_quantity", 0) or 0),
+            "bonus": int(getattr(o, "bonus_quantity", 0) or 0),
+            "min": int(getattr(o, "min_paid_quantity", 0) or 0),
+        }
+        for o in offers
+    ]
     bank_accounts = list(BankAccount.objects.filter(is_active=True).order_by("sort_order", "created_at")[:4])
 
     if request.method == "POST":
@@ -106,7 +114,8 @@ def buy_ticket(request, slug: str):
                 {
                     "raffle": raffle,
                     "form": TicketPurchaseForm(request.POST, request.FILES, raffle=raffle),
-                    "offer": offer,
+                    "offers": offers,
+                    "offers_data": offers_data,
                     "bank_accounts": bank_accounts,
                     "purchase_token": uuid.uuid4().hex,
                     "rate_limited": True,
@@ -159,7 +168,8 @@ def buy_ticket(request, slug: str):
         {
             "raffle": raffle,
             "form": form,
-            "offer": offer,
+            "offers": offers,
+            "offers_data": offers_data,
             "bank_accounts": bank_accounts,
             "purchase_token": uuid.uuid4().hex,
         },
@@ -285,7 +295,7 @@ def admin_raffle_calculator(request):
 
             # Offers affect how many TOTAL tickets get issued (paid + bonus),
             # which matters for max_tickets capacity.
-            offer = raffle.get_active_offer()
+            offer = raffle.get_active_offer(tickets_needed)
             bonus_tickets = int(offer.bonus_for(tickets_needed)) if offer else 0
             total_issued = int(tickets_needed) + int(bonus_tickets)
 

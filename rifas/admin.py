@@ -571,7 +571,7 @@ class TicketPurchaseAdmin(admin.ModelAdmin):
 
     @admin.display(description="Promoción (vista previa)")
     def promo_preview(self, obj: TicketPurchase):
-        offer = obj.raffle.get_active_offer() if obj.raffle_id else None
+        offer = obj.raffle.get_active_offer(obj.quantity) if obj.raffle_id else None
         if not offer:
             return "—"
         est = offer.bonus_for(obj.quantity) if obj.quantity else 0

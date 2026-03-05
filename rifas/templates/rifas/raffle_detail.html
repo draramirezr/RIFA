@@ -149,11 +149,13 @@
               {% if raffle.min_purchase_quantity and raffle.min_purchase_quantity > 1 %}
                 <li>🎟 Compra mínima: {{ raffle.min_purchase_quantity }} boletos.</li>
               {% endif %}
-              {% if offer %}
-                {% if offer.min_paid_quantity and offer.min_paid_quantity > 1 %}
-                  <li>🎯 Para aplicar la promoción: mínimo {{ offer.min_paid_quantity }} boletos.</li>
-                {% endif %}
-                <li>🎁 Promoción: Por cada {{ offer.buy_quantity }} boletos recibes {{ offer.bonus_quantity }} boleto gratis.</li>
+              {% if offers %}
+                {% for o in offers %}
+                  {% if o.min_paid_quantity and o.min_paid_quantity > 1 %}
+                    <li>🎯 Para aplicar la promoción: mínimo {{ o.min_paid_quantity }} boletos.</li>
+                  {% endif %}
+                  <li>🎁 Promoción: Por cada {{ o.buy_quantity }} boletos recibes {{ o.bonus_quantity }} boleto gratis.</li>
+                {% endfor %}
               {% endif %}
             </ul>
           </div>

@@ -335,16 +335,73 @@ class Raffle(models.Model):
             else:
                 self.save(update_fields=["is_active", "updated_at"])
 
-    def get_active_offer(self):
+    def get_active_offers(self):
         """
-        Returns the best active offer for this raffle (highest bonus).
+        Returns all active offers for this raffle within the date range.
         """
         now = timezone.now()
-        qs = self.offers.filter(is_active=True).filter(
-            models.Q(starts_at__isnull=True) | models.Q(starts_at__lte=now),
-            models.Q(ends_at__isnull=True) | models.Q(ends_at__gte=now),
+        return (
+            self.offers.filter(is_active=True).filter(
+                models.Q(starts_at__isnull=True) | models.Q(starts_at__lte=now),
+                models.Q(ends_at__isnull=True) | models.Q(ends_at__gte=now),
+            )
+            # Stable ordering for display
+            .order_by("min_paid_quantity", "buy_quantity", "-bonus_quantity", "-created_at")
         )
-        return qs.order_by("-bonus_quantity", "-buy_quantity", "-created_at").first()
+
+    def get_active_offer(self, paid_quantity: int | None = None):
+        """
+        Returns the best active offer for this raffle.
+
+        If paid_quantity is provided, pick the offer that yields the highest
+        `bonus_for(paid_quantity)` (so 5+1 correctly applies at qty=5 even if a 10+2 exists).
+        """
+        offers = list(self.get_active_offers())
+        if not offers:
+            return None
+
+        if paid_quantity is None:
+            # Best-effort default for display/legacy: prioritize higher bonus/buy.
+            return (
+                sorted(
+                    offers,
+                    key=lambda o: (
+                        int(getattr(o, "bonus_quantity", 0) or 0),
+                        int(getattr(o, "buy_quantity", 0) or 0),
+                        -int(getattr(o, "min_paid_quantity", 0) or 0),
+                        getattr(o, "created_at", None) or timezone.now(),
+                    ),
+                    reverse=True,
+                )
+                or [None]
+            )[0]
+
+        q = int(paid_quantity or 0)
+        best = None
+        best_bonus = -1
+        for o in offers:
+            try:
+                b = int(o.bonus_for(q) or 0)
+            except Exception:
+                b = 0
+            if b > best_bonus:
+                best_bonus = b
+                best = o
+                continue
+            if b == best_bonus and best is not None:
+                # Tie-break: prefer the offer with smaller buy_quantity (more attainable),
+                # then higher bonus_quantity.
+                try:
+                    if int(getattr(o, "buy_quantity", 0) or 0) < int(getattr(best, "buy_quantity", 0) or 0):
+                        best = o
+                        continue
+                    if int(getattr(o, "buy_quantity", 0) or 0) == int(getattr(best, "buy_quantity", 0) or 0) and int(
+                        getattr(o, "bonus_quantity", 0) or 0
+                    ) > int(getattr(best, "bonus_quantity", 0) or 0):
+                        best = o
+                except Exception:
+                    pass
+        return best
 
 
 class TicketPurchase(models.Model):
@@ -502,7 +559,7 @@ class TicketPurchase(models.Model):
             raffle.close_if_sold_out()
 
     def apply_offer(self):
-        offer = self.raffle.get_active_offer()
+        offer = self.raffle.get_active_offer(self.quantity)
         bonus = 0
         if offer:
             bonus = offer.bonus_for(self.quantity)
