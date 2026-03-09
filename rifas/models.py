@@ -1,5 +1,6 @@
 from django.db import IntegrityError, models, transaction
 from django.core.validators import MinValueValidator
+from django.core.validators import MaxValueValidator
 from django.utils import timezone
 from django.utils.text import slugify
 import secrets
@@ -149,6 +150,17 @@ class Raffle(models.Model):
         "Mostrar en Mis boletos",
         default=True,
         help_text="Si está desactivado, esta rifa no aparecerá en el selector de la página “Mis boletos”.",
+    )
+    use_manual_progress = models.BooleanField(
+        "Usar progreso manual",
+        default=False,
+        help_text="Si está activo, la web mostrará el progreso manual en lugar del progreso real (boletos aprobados).",
+    )
+    manual_progress_percent = models.PositiveSmallIntegerField(
+        "Progreso manual (%)",
+        default=0,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+        help_text="0–100. Solo se usa si “Usar progreso manual” está activo.",
     )
     finished_at = models.DateTimeField(
         null=True,
@@ -317,6 +329,18 @@ class Raffle(models.Model):
         if self.max_tickets <= 0:
             return 0
         return min(100, int((self.sold_tickets / self.max_tickets) * 100))
+
+    @property
+    def display_sold_percent(self) -> int:
+        """
+        Percent shown to the customer. Can be overridden manually via admin.
+        """
+        if getattr(self, "use_manual_progress", False):
+            try:
+                return max(0, min(100, int(getattr(self, "manual_progress_percent", 0) or 0)))
+            except Exception:
+                return 0
+        return int(self.sold_percent or 0)
 
     @property
     def is_sold_out(self) -> bool:

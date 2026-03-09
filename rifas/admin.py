@@ -171,9 +171,18 @@ class RaffleAdmin(admin.ModelAdmin):
         "is_active",
         "show_in_history",
         "show_in_my_tickets_search",
+        "use_manual_progress",
+        "manual_progress_percent",
         "created_at",
     )
-    list_filter = (RaffleShowAllFilter, "is_active", "show_in_history", "show_in_my_tickets_search", "show_draw_date")
+    list_filter = (
+        RaffleShowAllFilter,
+        "is_active",
+        "show_in_history",
+        "show_in_my_tickets_search",
+        "use_manual_progress",
+        "show_draw_date",
+    )
     search_fields = ("title", "slug")
     prepopulated_fields = {"slug": ("title",)}
     inlines = [RaffleImageInline, RaffleOfferInline]
