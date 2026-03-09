@@ -211,7 +211,13 @@ class RaffleAdmin(admin.ModelAdmin):
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
-        qs = qs.annotate(sold_tickets_annot=models.Count("tickets")).prefetch_related("offers")
+        # Faster than counting Ticket rows: sum total_tickets of APPROVED purchases.
+        qs = qs.annotate(
+            sold_tickets_annot=models.Sum(
+                "purchases__total_tickets",
+                filter=models.Q(purchases__status=TicketPurchase.Status.APPROVED),
+            )
+        ).prefetch_related("offers")
 
         show_all = (request.GET.get("show_all") or "").strip() == "1"
         if show_all:

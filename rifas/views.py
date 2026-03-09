@@ -62,7 +62,13 @@ def _rate_limit(*, key: str, limit: int, window_seconds: int) -> bool:
 def home(request):
     raffles = (
         Raffle.objects.filter(is_active=True)
-        .annotate(sold_tickets_annot=models.Count("tickets"))
+        # Faster than counting Ticket rows: sum total_tickets of APPROVED purchases.
+        .annotate(
+            sold_tickets_annot=models.Sum(
+                "purchases__total_tickets",
+                filter=models.Q(purchases__status=TicketPurchase.Status.APPROVED),
+            )
+        )
         .order_by("draw_date")
     )
     # `site` is provided globally via context processor (cached).
@@ -74,7 +80,12 @@ def raffle_detail(request, slug: str):
     # Allow viewing inactive/finished raffles (needed for Historial).
     try:
         raffle = get_object_or_404(
-            Raffle.objects.annotate(sold_tickets_annot=models.Count("tickets")).prefetch_related("images"),
+            Raffle.objects.annotate(
+                sold_tickets_annot=models.Sum(
+                    "purchases__total_tickets",
+                    filter=models.Q(purchases__status=TicketPurchase.Status.APPROVED),
+                )
+            ).prefetch_related("images"),
             slug=slug,
         )
     except Http404:
@@ -242,7 +253,12 @@ def raffle_history(request):
     finished = (
         Raffle.objects.filter(models.Q(draw_date__lte=now) | models.Q(is_active=False))
         .filter(show_in_history=True)
-        .annotate(sold_tickets_annot=models.Count("tickets"))
+        .annotate(
+            sold_tickets_annot=models.Sum(
+                "purchases__total_tickets",
+                filter=models.Q(purchases__status=TicketPurchase.Status.APPROVED),
+            )
+        )
         .annotate(winner_display_name_annot=winner_name_sq)
         .order_by("-draw_date")
     )
