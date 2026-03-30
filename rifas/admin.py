@@ -625,8 +625,18 @@ class TicketPurchaseAdmin(admin.ModelAdmin):
             except Exception:
                 self.message_user(request, "Falta la dependencia openpyxl para exportar a Excel.", level=messages.ERROR)
             else:
-                cl = self.get_changelist_instance(request)
-                qs = cl.get_queryset(request).select_related("bank_account")
+                # `export` is not a real filter; strip it before building ChangeList,
+                # otherwise Django treats it as an incorrect lookup.
+                _old_get = request.GET
+                try:
+                    params = request.GET.copy()
+                    params.pop("export", None)
+                    params.pop("e", None)
+                    request.GET = params
+                    cl = self.get_changelist_instance(request)
+                    qs = cl.get_queryset(request).select_related("bank_account")
+                finally:
+                    request.GET = _old_get
 
                 wb = openpyxl.Workbook()
                 ws = wb.active
@@ -912,10 +922,20 @@ class TicketAdmin(admin.ModelAdmin):
             except Exception:
                 self.message_user(request, "Falta la dependencia openpyxl para exportar a Excel.", level=messages.ERROR)
             else:
-                cl = self.get_changelist_instance(request)
-                # MySQL can error on DISTINCT with an implicit ORDER BY.
-                # Remove ordering before distinct and keep it as a subquery (no big in-memory list).
-                tqs = cl.get_queryset(request).select_related("purchase", "purchase__bank_account")
+                # `export` is not a real filter; strip it before building ChangeList,
+                # otherwise Django treats it as an incorrect lookup.
+                _old_get = request.GET
+                try:
+                    params = request.GET.copy()
+                    params.pop("export", None)
+                    params.pop("e", None)
+                    request.GET = params
+                    cl = self.get_changelist_instance(request)
+                    # MySQL can error on DISTINCT with an implicit ORDER BY.
+                    # Remove ordering before distinct and keep it as a subquery (no big in-memory list).
+                    tqs = cl.get_queryset(request).select_related("purchase", "purchase__bank_account")
+                finally:
+                    request.GET = _old_get
                 purchase_ids_sq = (
                     tqs.exclude(purchase_id__isnull=True)
                     .order_by()
