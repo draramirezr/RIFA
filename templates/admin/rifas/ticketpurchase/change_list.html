@@ -6,7 +6,7 @@
     <form method="get" style="padding: 10px 12px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
       {% for k, v in request.GET.items %}
         {# Do not carry admin error flag param "e" when toggling filters #}
-        {% if k != "show_all" and k != "e" %}
+        {% if k != "show_all" and k != "export" and k != "e" %}
           <input type="hidden" name="{{ k }}" value="{{ v }}">
         {% endif %}
       {% endfor %}
@@ -16,6 +16,9 @@
                onchange="this.form.submit()">
         {% translate "Ver todas (incluye rifas inactivas)" %}
       </label>
+      <button type="submit" name="export" value="1" class="button default" style="margin-left:auto;">
+        {% translate "Descargar Excel" %}
+      </button>
     </form>
   </div>
   {{ block.super }}

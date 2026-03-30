@@ -455,6 +455,45 @@ def reject_purchases(modeladmin, request, queryset):
             pass
 
 
+@admin.action(description="Exportar compras a Excel (.xlsx)")
+def export_ticket_purchases_xlsx(modeladmin, request, queryset):
+    """
+    Export selected TicketPurchase rows to Excel.
+    """
+    try:
+        import openpyxl  # type: ignore
+    except Exception:
+        modeladmin.message_user(
+            request,
+            "Falta la dependencia openpyxl para exportar a Excel.",
+            level=messages.ERROR,
+        )
+        return None
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Compras"
+    ws.append(["Nombre", "Teléfono", "Cantidad", "Monto (RD$)", "Banco", "Cuenta"])
+
+    for p in queryset.select_related("bank_account").order_by("-created_at", "-id").iterator(chunk_size=1000):
+        bank = getattr(p, "bank_account", None)
+        ws.append(
+            [
+                getattr(p, "full_name", "") or "",
+                getattr(p, "phone", "") or "",
+                int(getattr(p, "quantity", 0) or 0),
+                int(getattr(p, "total_amount", 0) or 0),
+                (getattr(bank, "bank_name", "") or "") if bank else "",
+                (getattr(bank, "account_number", "") or "") if bank else "",
+            ]
+        )
+
+    resp = HttpResponse(content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    resp["Content-Disposition"] = 'attachment; filename="compras_boletos.xlsx"'
+    wb.save(resp)
+    return resp
+
+
 class PhonePrefixFilter(admin.SimpleListFilter):
     title = "Prefijo"
     parameter_name = "phone_prefix"
@@ -549,7 +588,7 @@ class TicketPurchaseAdmin(admin.ModelAdmin):
         "user_agent",
         "proof_preview",
     )
-    actions = [approve_purchases, reject_purchases]
+    actions = [approve_purchases, reject_purchases, export_ticket_purchases_xlsx]
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
@@ -578,6 +617,40 @@ class TicketPurchaseAdmin(admin.ModelAdmin):
         cleaned = _clean_invalid_raffle_id_filter(request)
         if cleaned is not None:
             return cleaned
+
+        # Export current filtered changelist to Excel (no selection needed)
+        if request.method == "GET" and (request.GET.get("export") or "").strip() == "1":
+            try:
+                import openpyxl  # type: ignore
+            except Exception:
+                self.message_user(request, "Falta la dependencia openpyxl para exportar a Excel.", level=messages.ERROR)
+            else:
+                cl = self.get_changelist_instance(request)
+                qs = cl.get_queryset(request).select_related("bank_account")
+
+                wb = openpyxl.Workbook()
+                ws = wb.active
+                ws.title = "Compras"
+                ws.append(["Nombre", "Teléfono", "Cantidad", "Monto (RD$)", "Banco", "Cuenta"])
+
+                for p in qs.order_by("-created_at", "-id").iterator(chunk_size=1000):
+                    bank = getattr(p, "bank_account", None)
+                    ws.append(
+                        [
+                            getattr(p, "full_name", "") or "",
+                            getattr(p, "phone", "") or "",
+                            int(getattr(p, "quantity", 0) or 0),
+                            int(getattr(p, "total_amount", 0) or 0),
+                            (getattr(bank, "bank_name", "") or "") if bank else "",
+                            (getattr(bank, "account_number", "") or "") if bank else "",
+                        ]
+                    )
+
+                resp = HttpResponse(content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                resp["Content-Disposition"] = 'attachment; filename="compras_boletos_filtradas.xlsx"'
+                wb.save(resp)
+                return resp
+
         if request.method == "GET" and "status__exact" not in request.GET:
             params = request.GET.copy()
             params["status__exact"] = TicketPurchase.Status.PENDING
