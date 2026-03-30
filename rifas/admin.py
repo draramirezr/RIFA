@@ -913,10 +913,21 @@ class TicketAdmin(admin.ModelAdmin):
                 self.message_user(request, "Falta la dependencia openpyxl para exportar a Excel.", level=messages.ERROR)
             else:
                 cl = self.get_changelist_instance(request)
+                # MySQL can error on DISTINCT with an implicit ORDER BY.
+                # Remove ordering before distinct and keep it as a subquery (no big in-memory list).
                 tqs = cl.get_queryset(request).select_related("purchase", "purchase__bank_account")
-                purchase_ids = list(tqs.values_list("purchase_id", flat=True).distinct())
+                purchase_ids_sq = (
+                    tqs.exclude(purchase_id__isnull=True)
+                    .order_by()
+                    .values_list("purchase_id", flat=True)
+                    .distinct()
+                )
 
-                pqs = TicketPurchase.objects.filter(id__in=purchase_ids).select_related("bank_account").order_by("-created_at", "-id")
+                pqs = (
+                    TicketPurchase.objects.filter(id__in=purchase_ids_sq)
+                    .select_related("bank_account")
+                    .order_by("-created_at", "-id")
+                )
 
                 wb = openpyxl.Workbook()
                 ws = wb.active
