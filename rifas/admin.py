@@ -904,6 +904,43 @@ class TicketAdmin(admin.ModelAdmin):
         cleaned = _clean_invalid_raffle_id_filter(request)
         if cleaned is not None:
             return cleaned
+
+        # Export purchases (deduped) from current filtered tickets.
+        if request.method == "GET" and (request.GET.get("export") or "").strip() == "1":
+            try:
+                import openpyxl  # type: ignore
+            except Exception:
+                self.message_user(request, "Falta la dependencia openpyxl para exportar a Excel.", level=messages.ERROR)
+            else:
+                cl = self.get_changelist_instance(request)
+                tqs = cl.get_queryset(request).select_related("purchase", "purchase__bank_account")
+                purchase_ids = list(tqs.values_list("purchase_id", flat=True).distinct())
+
+                pqs = TicketPurchase.objects.filter(id__in=purchase_ids).select_related("bank_account").order_by("-created_at", "-id")
+
+                wb = openpyxl.Workbook()
+                ws = wb.active
+                ws.title = "Compras"
+                ws.append(["Nombre", "Teléfono", "Cantidad", "Monto (RD$)", "Banco", "Cuenta"])
+
+                for p in pqs.iterator(chunk_size=1000):
+                    bank = getattr(p, "bank_account", None)
+                    ws.append(
+                        [
+                            getattr(p, "full_name", "") or "",
+                            getattr(p, "phone", "") or "",
+                            int(getattr(p, "quantity", 0) or 0),
+                            int(getattr(p, "total_amount", 0) or 0),
+                            (getattr(bank, "bank_name", "") or "") if bank else "",
+                            (getattr(bank, "account_number", "") or "") if bank else "",
+                        ]
+                    )
+
+                resp = HttpResponse(content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                resp["Content-Disposition"] = 'attachment; filename="compras_desde_boletos.xlsx"'
+                wb.save(resp)
+                return resp
+
         return super().changelist_view(request, extra_context=extra_context)
 
     def get_queryset(self, request):
